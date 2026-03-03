@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rideshare Tax & Mileage Interactive Report</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  body { background-color: #f8fafc; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .chart-container { 
+    position: relative; 
+    width: 100%; 
+    max-width: 800px; 
+    margin-left: auto; 
+    margin-right: auto; 
+    height: 300px; 
+    max-height: 400px; 
+  }
+  @media (min-width: 768px) { 
+    .chart-container { height: 350px; } 
+  }
+</style>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e', 900: '#134e4a' },
+          accent: { 500: '#f59e0b', 600: '#d97706' }
+        }
+      }
+    }
+  }
+</script>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+<header class="bg-brand-700 text-white py-6 shadow-md">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Rideshare Tax & Mileage Report</h1>
+      <p class="text-brand-100 mt-1 text-sm">Interactive Synthesis: 2021-2024 Operational Data</p>
+    </div>
+    <div class="mt-4 sm:mt-0">
+      <label for="yearFilter" class="sr-only">Select Year</label>
+      <select id="yearFilter" class="bg-brand-900 text-white border border-brand-500 rounded-md py-2 px-4 focus:outline-none focus:ring-2 focus:ring-brand-100 cursor-pointer">
+        <option value="all">All Years Combined</option>
+        <option value="2024">Fiscal 2024</option>
+        <option value="2023">Fiscal 2023</option>
+        <option value="2022">Fiscal 2022</option>
+        <option value="2021">Fiscal 2021</option>
+      </select>
+    </div>
+  </div>
+</header>
+
+<main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
+
+  <section aria-labelledby="exec-summary-heading">
+    <div class="mb-6">
+      <h2 id="exec-summary-heading" class="text-2xl font-bold text-slate-800">Executive Summary</h2>
+      <p class="text-slate-600 mt-2 max-w-4xl">This section provides a consolidated view of critical financial and operational metrics. Use the dropdown menu in the header to filter these key performance indicators by specific tax years. This allows for rapid extraction of total net earnings and claimable business kilometers for annual tax filings.</p>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-t-4 border-t-brand-500 transition-transform transform hover:-translate-y-1">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Net Earnings</h3>
+        <div id="kpi-net" class="text-3xl font-bold text-slate-800">$0.00</div>
+        <p class="mt-2 text-xs text-slate-500">Post-platform fees & deductions</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-t-4 border-t-accent-500 transition-transform transform hover:-translate-y-1">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Business Kilometers</h3>
+        <div id="kpi-km" class="text-3xl font-bold text-slate-800">0</div>
+        <p class="mt-2 text-xs text-slate-500">Total driven for Uber/Lyft</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-t-4 border-t-brand-500 transition-transform transform hover:-translate-y-1">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Trips Completed</h3>
+        <div id="kpi-trips" class="text-3xl font-bold text-slate-800">0</div>
+        <p class="mt-2 text-xs text-slate-500">Combined platform passenger rides</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-t-4 border-t-accent-500 transition-transform transform hover:-translate-y-1">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Net GST/HST Owing</h3>
+        <div id="kpi-tax" class="text-3xl font-bold text-slate-800">$0.00</div>
+        <p class="mt-2 text-xs text-slate-500">Collected minus ITC</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="trends-heading">
+    <div class="mb-6">
+      <h2 id="trends-heading" class="text-2xl font-bold text-slate-800">Financial Performance Trends</h2>
+      <p class="text-slate-600 mt-2 max-w-4xl">This visualization tracks the relationship between gross fares collected from passengers and the actual net earnings received after Uber and Lyft platform commissions are deducted. Hover over the bars to view exact monetary values and observe the earning peak during the 2022-2023 operating window.</p>
+    </div>
+    
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div class="chart-container">
+        <canvas id="financialChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="operations-heading" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div>
+      <div class="mb-6">
+        <h2 id="operations-heading" class="text-2xl font-bold text-slate-800">Platform Distribution</h2>
+        <p class="text-slate-600 mt-2">This chart organizes the operational volume by platform over the lifetime of the enterprise. It visually represents the strategic shift from initial Lyft reliance toward a majority Uber-based operation. Hover to view the exact kilometer breakdown.</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div class="chart-container" style="height: 250px;">
+          <canvas id="platformChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold text-slate-800">Audit Strategy & Risk Mitigation</h2>
+        <p class="text-slate-600 mt-2">To proactively minimize CRA audit exposure, a "Conservative Business Percentage" model is utilized. The table below details the deliberate reduction of claimed business use against actual calculated usage, establishing a documented margin of safety.</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <table class="min-w-full text-sm text-left">
+          <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-xs font-semibold">
+            <tr>
+              <th scope="col" class="px-6 py-4">Fiscal Year</th>
+              <th scope="col" class="px-6 py-4">Calculated Usage</th>
+              <th scope="col" class="px-6 py-4 text-brand-700">Claimed Strategy</th>
+              <th scope="col" class="px-6 py-4 text-center">Audit Risk Profile</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 bg-white">
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-6 py-4 font-medium text-slate-800">2021</td>
+              <td class="px-6 py-4 text-slate-600">17.9%</td>
+              <td class="px-6 py-4 font-bold text-brand-700">17.9%</td>
+              <td class="px-6 py-4 text-center"><span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs">Low Baseline</span></td>
+            </tr>
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-6 py-4 font-medium text-slate-800">2022</td>
+              <td class="px-6 py-4 text-slate-600">29.7%</td>
+              <td class="px-6 py-4 font-bold text-brand-700">28.0%</td>
+              <td class="px-6 py-4 text-center"><span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">Conservative</span></td>
+            </tr>
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-6 py-4 font-medium text-slate-800">2023</td>
+              <td class="px-6 py-4 text-slate-600">43.2%</td>
+              <td class="px-6 py-4 font-bold text-brand-700">40.0%</td>
+              <td class="px-6 py-4 text-center"><span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">Conservative</span></td>
+            </tr>
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-6 py-4 font-medium text-slate-800">2024</td>
+              <td class="px-6 py-4 text-slate-600">67.4%</td>
+              <td class="px-6 py-4 font-bold text-brand-700">60.0%</td>
+              <td class="px-6 py-4 text-center"><span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs">Highly Defensible</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  const reportData = {
+    "2021": { gross: 3455.13, net: 2474.29, gst: 309.91, km: 2235.87, trips: 255 },
+    "2022": { gross: 10929.71, net: 7622.63, gst: 956.39, km: 8472.00, trips: 97 + 500 }, 
+    "2023": { gross: 10169.57, net: 6699.36, gst: 826.03, km: 10528.00, trips: 135 + 600 },
+    "2024": { gross: 4054.52, net: 2812.64, gst: 383.79, km: 6449.00, trips: 86 + 300 }
+  };
+
+  const platformData = {
+    uberKm: 17907,
+    lyftKm: 4276.51
+  };
+
+  const fmtCurrency = (num) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(num);
+  const fmtNum = (num) => new Intl.NumberFormat('en-CA', { maximumFractionDigits: 0 }).format(num);
+
+  function updateDashboard(year) {
+    let tNet = 0, tKm = 0, tTrips = 0, tGst = 0;
+    
+    if (year === 'all') {
+      Object.values(reportData).forEach(d => {
+        tNet += d.net; tKm += d.km; tTrips += d.trips; tGst += d.gst;
+      });
+    } else {
+      const d = reportData[year];
+      tNet = d.net; tKm = d.km; tTrips = d.trips; tGst = d.gst;
+    }
+
+    document.getElementById('kpi-net').innerText = fmtCurrency(tNet);
+    document.getElementById('kpi-km').innerText = fmtNum(tKm);
+    document.getElementById('kpi-trips').innerText = fmtNum(tTrips);
+    document.getElementById('kpi-tax').innerText = fmtCurrency(tGst);
+  }
+
+  function initVisualizations() {
+    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    Chart.defaults.color = '#64748b';
+
+    const years = Object.keys(reportData);
+    const grossData = years.map(y => reportData[y].gross);
+    const netData = years.map(y => reportData[y].net);
+
+    const finCtx = document.getElementById('financialChart').getContext('2d');
+    new Chart(finCtx, {
+      type: 'bar',
+      data: {
+        labels: years,
+        datasets: [
+          { label: 'Gross Fares ($)', data: grossData, backgroundColor: '#cbd5e1', borderRadius: 4 },
+          { label: 'Net Earnings ($)', data: netData, backgroundColor: '#0d9488', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}` } }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    const platCtx = document.getElementById('platformChart').getContext('2d');
+    new Chart(platCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Uber (Lifetime KM)', 'Lyft (Lifetime KM)'],
+        datasets: [{
+          data: [platformData.uberKm, platformData.lyftKm],
+          backgroundColor: ['#0f172a', '#f43f5e'],
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+          legend: { position: 'right' },
+          tooltip: { callbacks: { label: (ctx) => ` ${fmtNum(ctx.raw)} km` } }
+        }
+      }
+    });
+  }
+
+  document.getElementById('yearFilter').addEventListener('change', (e) => {
+    updateDashboard(e.target.value);
+  });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    updateDashboard('all');
+    initVisualizations();
+  });
+</script>
+</body>
+</html>
