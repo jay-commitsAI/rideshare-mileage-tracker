@@ -100,9 +100,9 @@ tr:hover { background: #f8fafc; }
     
     <div class="upload-area" id="uploadArea">
       <div class="icon">📁</div>
-      <p>Drag & Drop your <strong>Takeout .zip</strong></p>
+      <p>Drag & Drop your <strong>Takeout .zip</strong> OR <strong>Timeline.json</strong></p>
       <input type="file" id="fileInput" accept=".json,.zip" multiple>
-      <button class="btn btn-primary" style="margin-top:1rem;" onclick="document.getElementById('fileInput').click()">Select Zip File</button>
+      <button type="button" class="btn btn-primary" style="margin-top:1rem; pointer-events: none;">Select File</button>
     </div>
 
     <!-- THE BYPASS BUTTON -->
@@ -112,7 +112,7 @@ tr:hover { background: #f8fafc; }
     </div>
     
     <div id="processingStatus" class="hidden" style="padding: 2rem; text-align: center;">
-      <h3>Scanning all files for GPS data...</h3>
+      <h3>Scanning file(s) for GPS data...</h3>
       <div class="progress-wrap"><div class="progress-fill" id="progressBar"></div></div>
       <p class="status-text" id="statusText">Extracting...</p>
     </div>
@@ -206,14 +206,28 @@ let isBypassMode = false;
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 
-uploadArea.addEventListener('click', () => fileInput.click());
+// Fixed the double-click issue here
+uploadArea.addEventListener('click', (e) => { 
+    if(e.target.id !== 'fileInput') fileInput.click(); 
+});
+
 uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.style.borderColor = 'var(--color-primary)'; });
 uploadArea.addEventListener('dragleave', () => uploadArea.style.borderColor = '');
 uploadArea.addEventListener('drop', e => { 
   e.preventDefault(); uploadArea.style.borderColor = '';
-  if (e.dataTransfer.files.length) processGoogleFiles(e.dataTransfer.files); 
+  if (e.dataTransfer.files.length) handleImmediateUpload(e.dataTransfer.files); 
 });
-fileInput.addEventListener('change', e => { if (e.target.files.length) processGoogleFiles(e.target.files); });
+
+fileInput.addEventListener('change', e => { 
+    if (e.target.files.length) handleImmediateUpload(e.target.files); 
+});
+
+function handleImmediateUpload(files) {
+  // Show progress UI instantly before thread freezes
+  document.getElementById('uploadArea').classList.add('hidden');
+  document.getElementById('processingStatus').classList.remove('hidden');
+  setTimeout(() => processGoogleFiles(files), 50);
+}
 
 // BYPASS GOOGLE COMPLETELY
 function bypassGoogle() {
@@ -225,14 +239,16 @@ function bypassGoogle() {
 }
 
 async function processGoogleFiles(files) {
-  document.getElementById('uploadArea').classList.add('hidden');
-  document.getElementById('processingStatus').classList.remove('hidden');
   allTrips = [];
   
   try {
     const file = files[0];
     if (file.name.toLowerCase().endsWith('.zip')) {
       await extractFromZip(file);
+    } else if (file.name.toLowerCase().endsWith('.json')) {
+      await extractFromJson(file);
+    } else {
+      throw new Error("Please upload a .zip or .json file.");
     }
 
     if (allTrips.length === 0) {
@@ -247,6 +263,14 @@ async function processGoogleFiles(files) {
     document.getElementById('uploadArea').classList.remove('hidden');
     document.getElementById('processingStatus').classList.add('hidden');
   }
+}
+
+async function extractFromJson(file) {
+  setStatus("Reading JSON file...", 50);
+  const text = await file.text();
+  const data = JSON.parse(text);
+  if (data.timelineObjects || data.semanticSegments) processSemantic(data);
+  if (data.locations) await processRecords(data.locations);
 }
 
 async function extractFromZip(file) {
@@ -266,7 +290,7 @@ async function extractFromZip(file) {
     try {
       const data = JSON.parse(await entry.async("string"));
       // Check for any known Google array format
-      if (data.timelineObjects) processSemantic(data);
+      if (data.timelineObjects || data.semanticSegments) processSemantic(data);
       if (data.locations) await processRecords(data.locations);
     } catch(e) {}
     count++;
@@ -275,27 +299,82 @@ async function extractFromZip(file) {
 }
 
 function processSemantic(data) {
+  const parseLoc = (loc) => {
+    if (!loc) return {lat:0, lng:0};
+    if (loc.latitudeE7) return {lat: loc.latitudeE7/1e7, lng: loc.longitudeE7/1e7};
+    if (loc.latLng) {
+        const parts = loc.latLng.split(',');
+        return {lat: parseFloat(parts[0].replace('°','')), lng: parseFloat(parts[1].replace('°',''))};
+    }
+    return {lat:0, lng:0};
+  };
+
+  // 1. Classic Takeout Format (timelineObjects)
   (data.timelineObjects || []).forEach(obj => {
     if (!obj.activitySegment) return;
     const seg = obj.activitySegment;
     
-    // BROADENED ALGORITHM: Catch "IN_VEHICLE" and "UNKNOWN" if distance > 0.5km
     const type = seg.activityType;
     let dist = (seg.distance || 0)/1000;
     const isValidType = ['IN_PASSENGER_VEHICLE', 'DRIVING', 'IN_VEHICLE', 'MOTORCYCLING'].includes(type);
-    
     if (!isValidType && dist < 0.5) return; 
 
     const start = new Date(seg.duration.startTimestamp || seg.duration.startTimestampMs || 0);
     const end = new Date(seg.duration.endTimestamp || seg.duration.endTimestampMs || 0);
     if (start.getFullYear() < 2021) return;
     
-    const sLoc = seg.startLocation, eLoc = seg.endLocation;
-    if (!sLoc || !eLoc) return;
+    const sLoc = parseLoc(seg.startLocation);
+    const eLoc = parseLoc(seg.endLocation);
     
-    const sLat = sLoc.latitudeE7/1e7, sLng = sLoc.longitudeE7/1e7;
-    const eLat = eLoc.latitudeE7/1e7, eLng = eLoc.longitudeE7/1e7;
+    if (dist <= 0) dist = haversine(sLoc.lat, sLoc.lng, eLoc.lat, eLoc.lng);
+    if (dist < 0.2) return;
+
+    allTrips.push({
+      id: `trip_${start.getTime()}`, year: start.getFullYear(),
+      startTime: start, endTime: end, distanceKm: dist, duration: Math.max(1, Math.round((end-start)/60000)),
+      sLat: sLoc.lat, sLng: sLoc.lng, eLat: eLoc.lat, eLng: eLoc.lng,
+      startAddress: '', endAddress: '', tag: 'untagged', purpose: ''
+    });
+  });
+
+  // 2. New Timeline.json Format (semanticSegments)
+  (data.semanticSegments || []).forEach(seg => {
+    if (seg.visit) return; // Skip stationary visits
+
+    const type = seg.activity ? (seg.activity.activityType || seg.activity.type) : 'UNKNOWN';
+    let dist = (seg.activity ? (seg.activity.distanceMeters || seg.activity.distance || 0) : 0) / 1000;
     
+    const isValidType = ['IN_PASSENGER_VEHICLE', 'DRIVING', 'IN_VEHICLE', 'MOTORCYCLING'].includes(type);
+    
+    const start = new Date(seg.startTime);
+    const end = new Date(seg.endTime);
+    if (start.getFullYear() < 2021) return;
+
+    let sLat = 0, sLng = 0, eLat = 0, eLng = 0;
+
+    if (seg.activity && seg.activity.start) {
+        const sLoc = parseLoc(seg.activity.start);
+        const eLoc = parseLoc(seg.activity.end);
+        sLat = sLoc.lat; sLng = sLoc.lng; eLat = eLoc.lat; eLng = eLoc.lng;
+    } else if (seg.timelinePath && seg.timelinePath.length > 0) {
+        // Fallback for paths with missing activity metadata
+        const sLocStr = seg.timelinePath[0].point;
+        const eLocStr = seg.timelinePath[seg.timelinePath.length - 1].point;
+        if (sLocStr) { const sp = sLocStr.split(','); sLat = parseFloat(sp[0]); sLng = parseFloat(sp[1]); }
+        if (eLocStr) { const ep = eLocStr.split(','); eLat = parseFloat(ep[0]); eLng = parseFloat(ep[1]); }
+        
+        if (dist <= 0) {
+            let calcDist = 0;
+            for (let i = 1; i < seg.timelinePath.length; i++) {
+                const p1 = seg.timelinePath[i-1].point.split(',');
+                const p2 = seg.timelinePath[i].point.split(',');
+                calcDist += haversine(parseFloat(p1[0]), parseFloat(p1[1]), parseFloat(p2[0]), parseFloat(p2[1]));
+            }
+            dist = calcDist;
+        }
+    }
+
+    if (!isValidType && dist < 0.5) return;
     if (dist <= 0) dist = haversine(sLat, sLng, eLat, eLng);
     if (dist < 0.2) return;
 
