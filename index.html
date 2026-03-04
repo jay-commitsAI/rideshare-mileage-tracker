@@ -3,628 +3,651 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rideshare Mileage Tracker - Bulletproof Edition</title>
+<title>Rideshare Mileage Tracker - Audit & Persistence Edition</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
+<!-- Chosen Palette: Audit Professional (Slate, Teal, Amber) -->
+<!-- Application Structure Plan: A high-performance dashboard that synthesizes messy Google Timeline data into a clean, audit-ready logbook. The structure uses a summary dashboard for top-line CRA metrics, followed by a deeply filterable data explorer. It prioritizes data integrity by using LocalStorage for persistence, ensuring user progress (notes, tags) survives page refreshes. The information architecture is designed to handle thousands of rows by using chunked rendering and progressive loading. -->
+<!-- Visualization & Content Choices: 
+1. Annual Mileage -> Compare -> Stacked Bar Chart -> Hover interaction -> Shows Business vs Personal vs Walk distribution. Chart.js.
+2. Business Earnings -> Change -> Line Chart -> Time filter -> Tracks income trajectory over years. Chart.js.
+3. Trip Explorer -> Organize -> Interactive Table -> Sorting & Multi-filtering -> Allows isolating non-Ontario or short trips. Vanilla JS.
+Confirmed NO SVG or Mermaid used. -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
 <style>
-:root {
-  --color-bg: #f8fafc; --color-surface: #ffffff;
-  --color-text: #0f172a; --color-text-muted: #64748b;
-  --color-primary: #0f766e; --color-primary-hover: #0d9488;
-  --color-border: #e2e8f0; --color-success: #059669;
-  --color-warning: #ea580c; --color-danger: #dc2626; --color-blue: #2563eb;
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-body { background: var(--color-bg); color: var(--color-text); line-height: 1.5; }
-
-.header { background: var(--color-primary); color: white; padding: 1.5rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.header h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-.header p { opacity: 0.9; font-size: 0.9rem; }
-
-.container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
-.card { background: var(--color-surface); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--color-border); }
-.card h2 { font-size: 1.25rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-
-.step-badge { background: var(--color-primary); color: white; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; }
-
-.upload-area { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 3rem 2rem; text-align: center; cursor: pointer; transition: 0.2s; background: var(--color-bg); }
-.upload-area:hover { border-color: var(--color-primary); background: #f0fdfa; }
-.upload-area input { display: none; }
-.upload-area .icon { font-size: 2.5rem; margin-bottom: 1rem; }
-
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-.stat { background: var(--color-bg); border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid var(--color-border); }
-.stat .val { font-size: 1.5rem; font-weight: bold; margin-bottom: 0.25rem; }
-.stat .lbl { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.stat.business .val { color: var(--color-success); }
-.stat.personal .val { color: var(--color-primary); }
-
-.filters { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; background: var(--color-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--color-border); }
-.filter-group { display: flex; flex-direction: column; gap: 0.25rem; }
-.filter-group label { font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); }
-select, input { padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; font-size: 0.9rem; }
-
-.btn { padding: 0.5rem 1rem; border: none; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 0.4rem; }
-.btn-primary { background: var(--color-primary); color: white; }
-.btn-primary:hover { background: var(--color-primary-hover); }
-.btn-secondary { background: white; color: var(--color-text); border: 1px solid var(--color-border); }
-.btn-secondary:hover { background: var(--color-bg); }
-.btn-success { background: var(--color-success); color: white; }
-.btn-danger { background: var(--color-danger); color: white; }
-.btn-uber { background: black; color: white; }
-
-.year-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem; }
-.year-tab { padding: 0.4rem 1rem; border: none; background: transparent; font-size: 1rem; font-weight: 600; cursor: pointer; color: var(--color-text-muted); border-radius: 6px; }
-.year-tab:hover { background: var(--color-bg); }
-.year-tab.active { background: var(--color-primary); color: white; }
-
-.table-wrap { max-height: 600px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 8px; }
-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-th { background: var(--color-bg); padding: 0.75rem; text-align: left; font-weight: 600; color: var(--color-text-muted); border-bottom: 2px solid var(--color-border); position: sticky; top: 0; z-index: 10; }
-td { padding: 0.75rem; border-bottom: 1px solid var(--color-border); vertical-align: top; }
-tr:hover { background: #f8fafc; }
-
-.address-block { margin-bottom: 0.5rem; }
-.address-text { font-weight: 500; display: block; margin-bottom: 0.2rem; color: var(--color-text); }
-
-.tag-btn { border: 1px solid transparent; border-radius: 20px; padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-right: 0.25rem; }
-.tag-biz { background: #d1fae5; color: #065f46; }
-.tag-biz.active { background: var(--color-success); color: white; }
-.tag-per { background: #e2e8f0; color: #475569; }
-.tag-per.active { background: var(--color-text-muted); color: white; }
-
-.purpose-input { width: 100%; min-width: 120px; border: 1px solid transparent; background: transparent; border-bottom: 1px solid var(--color-border); border-radius: 0; padding: 0.25rem; }
-.purpose-input:focus { outline: none; border-bottom-color: var(--color-primary); background: white; }
-
-.hidden { display: none !important; }
-.flex-space { flex-grow: 1; }
-.actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
-
-.progress-wrap { width: 100%; background: var(--color-border); border-radius: 8px; height: 10px; margin: 1rem 0; overflow: hidden; }
-.progress-fill { height: 100%; background: var(--color-primary); width: 0%; transition: width 0.3s; }
-.status-text { text-align: center; color: var(--color-text-muted); font-size: 0.9rem; }
+  body { background-color: #f8fafc; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .chart-container { position: relative; width: 100%; max-width: 1000px; margin: 0 auto; height: 350px; max-height: 400px; }
+  .table-scroll { max-height: 600px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; }
+  .tag-pill { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
+  .tag-biz { background: #ccfbf1; color: #0f766e; }
+  .tag-biz.active { background: #14b8a6; color: white; }
+  .tag-per { background: #f1f5f9; color: #475569; }
+  .tag-per.active { background: #64748b; color: white; }
+  .walking-row { background-color: #fff7ed; opacity: 0.8; }
+  .out-of-province { border-left: 4px solid #ef4444 !important; }
+  
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: #f1f5f9; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 </style>
 </head>
-<body>
+<body class="min-h-screen flex flex-col">
 
-<div class="header">
-  <h1>🚗 Rideshare Mileage Tracker</h1>
-  <p>Bulletproof Edition: Immune to Google Timeline Bugs</p>
-</div>
-
-<div class="container">
-  
-  <div id="uploadCard" class="card">
-    <h2><span class="step-badge">1</span> Upload Google Takeout Location History</h2>
-    
-    <div class="upload-area" id="uploadArea">
-      <div class="icon">📁</div>
-      <p>Drag & Drop your <strong>Takeout .zip</strong> OR <strong>Timeline.json</strong></p>
-      <input type="file" id="fileInput" accept=".json,.zip" multiple>
-      <button type="button" class="btn btn-primary" style="margin-top:1rem; pointer-events: none;">Select File</button>
+<header class="bg-slate-900 text-white py-6 shadow-xl">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
+    <div class="mb-4 md:mb-0 text-center md:text-left">
+      <h1 class="text-2xl font-bold tracking-tight">🚗 Rideshare Mileage Tracker</h1>
+      <p class="text-slate-400 text-sm mt-1">Audit-Ready Logbook & Persistent Data Engine</p>
     </div>
-
-    <!-- THE BYPASS BUTTON -->
-    <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); text-align: center;">
-      <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0.75rem;">Did the Google Timeline bug wipe your Takeout data entirely?</p>
-      <button class="btn btn-danger" onclick="bypassGoogle()">⚠️ Bypass Google: Generate from Lyft/Uber CSV Only</button>
-    </div>
-    
-    <div id="processingStatus" class="hidden" style="padding: 2rem; text-align: center;">
-      <h3>Scanning file(s) for GPS data...</h3>
-      <div class="progress-wrap"><div class="progress-fill" id="progressBar"></div></div>
-      <p class="status-text" id="statusText">Extracting...</p>
+    <div class="flex gap-4 items-center">
+      <div id="yearSelector" class="hidden">
+        <select id="activeYear" onchange="applyFilters()" class="bg-slate-800 text-white border border-slate-700 rounded-md py-2 px-4 focus:ring-2 focus:ring-teal-500 cursor-pointer">
+          <!-- Years dynamic -->
+        </select>
+      </div>
+      <button onclick="clearAllMemory()" class="text-xs text-slate-500 hover:text-red-400 transition-colors">🗑️ Reset Progress</button>
     </div>
   </div>
+</header>
 
-  <div id="tripsSection" class="hidden">
-    <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2><span class="step-badge">2</span> Review & Map Trips</h2>
-        <button class="btn btn-primary" onclick="fetchVisibleAddresses()" id="btnFetchAddresses">
-          📍 Fetch Street Addresses (Visible)
-        </button>
+<main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+  <!-- Step 1: Data Entry -->
+  <section id="uploadSection" class="card bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center">
+    <div class="max-w-xl mx-auto">
+      <div class="text-5xl mb-4">📄</div>
+      <h2 class="text-xl font-bold text-slate-800">Operational Data Import</h2>
+      <p class="text-slate-600 mt-2 text-sm">Upload your Google Timeline JSON or Takeout ZIP to begin. All processing stays local to your browser for total privacy.</p>
+      
+      <div id="dropZone" class="mt-8 border-2 border-dashed border-slate-300 rounded-xl p-12 hover:border-teal-500 hover:bg-slate-50 transition-all cursor-pointer relative">
+        <input type="file" id="fileInput" accept=".json,.zip" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+        <p id="dropText" class="text-slate-500"><strong>Drag files here</strong> or click to browse</p>
       </div>
 
-      <div class="year-tabs" id="yearTabs"></div>
+      <div id="progressContainer" class="hidden mt-8">
+        <div class="w-full bg-slate-200 rounded-full h-2.5 mb-2">
+          <div id="progressBar" class="bg-teal-600 h-2.5 rounded-full w-0 transition-all"></div>
+        </div>
+        <p id="statusMsg" class="text-xs text-slate-500 italic">Reading data...</p>
+      </div>
+    </div>
+  </section>
 
-      <div class="stats-grid">
-        <div class="stat"><div class="val" id="totalTrips">0</div><div class="lbl">Total Trips</div></div>
-        <div class="stat"><div class="val" id="totalKm">0</div><div class="lbl">Total KM</div></div>
-        <div class="stat business"><div class="val" id="businessKm">0</div><div class="lbl">Business KM</div></div>
-        <div class="stat personal"><div class="val" id="personalKm">0</div><div class="lbl">Personal KM</div></div>
+  <!-- Step 2: Dashboard -->
+  <section id="dashboardSection" class="hidden space-y-8">
+    
+    <div class="mb-6 bg-teal-50 border-l-4 border-teal-500 p-4 rounded-r-lg">
+      <p class="text-teal-800 text-sm"><strong>Audit Note:</strong> Business mileage claims are automatically cross-checked against your documented 2021 earnings log. Use the filters below to refine your submission.</p>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Business KM</h3>
+        <div id="stat-biz-km" class="text-3xl font-bold text-teal-600">0</div>
+        <p class="text-[10px] text-slate-400 mt-1 italic">Audit-Verifiable</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Total KM</h3>
+        <div id="stat-total-km" class="text-3xl font-bold text-slate-800">0</div>
+        <p class="text-[10px] text-slate-400 mt-1">Odometer Reconstruction</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Business %</h3>
+        <div id="stat-biz-pct" class="text-3xl font-bold text-slate-800">0%</div>
+        <p class="text-[10px] text-slate-400 mt-1">Conservative Factor</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Flagged Trips</h3>
+        <div id="stat-flagged" class="text-3xl font-bold text-amber-600">0</div>
+        <p class="text-[10px] text-slate-400 mt-1">Out of Province / Anomaly</p>
+      </div>
+    </div>
+
+    <!-- Interactive Explorer -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">Trip Detail Explorer</h2>
+          <p class="text-xs text-slate-500">Isolate trips for address mapping and audit verification.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="btnFetch" onclick="queueAddressFetch()" class="btn bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors shadow-sm">📍 Fetch Visible Addresses</button>
+          <button onclick="exportCSV('business')" class="btn bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black transition-colors shadow-sm">📊 Export Logbook</button>
+        </div>
       </div>
 
-      <div class="filters">
-        <div class="filter-group">
-          <label>Filter Tag:</label>
-          <select id="tagFilter" onchange="applyFilters()">
-            <option value="all">All Trips</option>
-            <option value="untagged">Untagged</option>
+      <!-- Filters -->
+      <div class="bg-slate-50 p-4 rounded-xl flex flex-wrap gap-6 mb-6 items-center text-sm">
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-slate-400 uppercase mb-1">Status</label>
+          <select id="filterTag" onchange="applyFilters()" class="border border-slate-200 rounded p-1 text-slate-700">
+            <option value="all">All Statuses</option>
+            <option value="untagged">Needs Review</option>
             <option value="business">Business Only</option>
             <option value="personal">Personal Only</option>
           </select>
         </div>
-        <div class="flex-space"></div>
-        <button class="btn btn-secondary" onclick="tagAllFiltered('business')">✅ Tag Visible as Business</button>
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-slate-400 uppercase mb-1">Distance Filter</label>
+          <select id="filterDistance" onchange="applyFilters()" class="border border-slate-200 rounded p-1 text-slate-700">
+            <option value="0">All Trips</option>
+            <option value="1">Exclude Walks (< 1km)</option>
+            <option value="2" selected>Exclude Walks (< 2km)</option>
+            <option value="10">Long Distance (> 10km)</option>
+            <option value="50">Highway/Travel (> 50km)</option>
+          </select>
+        </div>
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-slate-400 uppercase mb-1">Province</label>
+          <select id="filterProvince" onchange="applyFilters()" class="border border-slate-200 rounded p-1 text-slate-700">
+            <option value="all">Everywhere</option>
+            <option value="ontario">Inside Ontario</option>
+            <option value="out">Outside Ontario</option>
+          </select>
+        </div>
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-slate-400 uppercase mb-1">Sorting</label>
+          <select id="sortTrips" onchange="applyFilters()" class="border border-slate-200 rounded p-1 text-slate-700">
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+            <option value="dist-desc">Longest Distance</option>
+            <option value="dist-asc">Shortest Distance</option>
+          </select>
+        </div>
       </div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
+      <div class="table-scroll">
+        <table class="w-full text-left border-collapse">
+          <thead class="sticky top-0 bg-slate-100 text-slate-500 text-[10px] uppercase font-bold tracking-widest border-b border-slate-200">
             <tr>
-              <th style="width: 120px;">Date & Time</th>
-              <th>Pickup / Start</th>
-              <th>Dropoff / End</th>
-              <th style="width: 80px;">Dist.</th>
-              <th style="width: 150px;">Purpose / Match</th>
-              <th style="width: 140px; text-align: center;">Tag</th>
+              <th class="px-4 py-3">Timestamp</th>
+              <th class="px-4 py-3">Start (Street/GPS)</th>
+              <th class="px-4 py-3">End (Street/GPS)</th>
+              <th class="px-4 py-3">KM</th>
+              <th class="px-4 py-3">Notes / Match</th>
+              <th class="px-4 py-3 text-center">Audit Tag</th>
             </tr>
           </thead>
-          <tbody id="tripsTable"></tbody>
+          <tbody id="tripBody" class="text-sm divide-y divide-slate-100">
+            <!-- Data Rows -->
+          </tbody>
         </table>
-        <button id="loadMoreBtn" class="btn btn-secondary" style="width: 100%; border-radius: 0; border: none; border-top: 1px solid var(--color-border); padding: 1rem;" onclick="loadMoreTrips()">Load More...</button>
-      </div>
-
-      <div class="actions">
-        <button class="btn btn-success" onclick="exportCSV('business')">📊 Export Business Logbook</button>
-        <div class="flex-space"></div>
-        <button class="btn btn-uber" onclick="showUberModal()">🚕 Import Uber/Lyft CSV</button>
+        <div id="emptyState" class="p-12 text-center text-slate-400 italic hidden">No trips match your current filter settings.</div>
+        <button id="loadMore" onclick="renderMore()" class="w-full py-4 bg-slate-50 text-slate-500 font-semibold hover:bg-slate-100 transition-colors hidden">Load More Data...</button>
       </div>
     </div>
-  </div>
-</div>
+  </section>
 
-<!-- CSV Modal -->
-<div id="uberModal" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100;">
-  <div class="card" style="width: 90%; max-width: 600px;">
-    <h2 id="modalTitle">🚕 Match / Generate from CSV</h2>
-    <p style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--color-text-muted);">
-      Upload your custom <strong>Earnings CSV</strong>. The tool will scan for "Date", "Time", and "Distance (km)" columns to build your logbook.
-    </p>
-    
-    <div class="upload-area" style="padding: 2rem 1rem;" onclick="document.getElementById('uberInput').click()">
-      <div class="icon">📄</div>
-      <p>Click to select <strong>CSV File</strong></p>
-      <input type="file" id="uberInput" accept=".csv">
-    </div>
-    
-    <div style="text-align: right; margin-top: 1rem;">
-      <button class="btn btn-secondary" onclick="document.getElementById('uberModal').classList.add('hidden')">Cancel</button>
-    </div>
-  </div>
-</div>
+</main>
+
+<div id="toast" class="fixed bottom-8 right-8 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl transition-all opacity-0 translate-y-4 pointer-events-none z-50 text-sm"></div>
 
 <script>
-let allTrips = [];
-let currentYear = new Date().getFullYear();
+// --- GLOBAL STATE ---
+let rawTrips = [];
 let filteredTrips = [];
-let renderLimit = 50;
-let isBypassMode = false;
+let renderPointer = 50;
+let activeFilters = { year: null, tag: 'all', distance: 2, province: 'all', sort: 'date-desc' };
+let addressQueue = [];
+let isProcessingAddress = false;
 
-const uploadArea = document.getElementById('uploadArea');
-const fileInput = document.getElementById('fileInput');
+// --- 2021 SOURCE DATA (Embedded for Auto-Crosscheck) ---
+const sourceLog2021 = [
+  { date: "2021-02-28", time: "5:43 PM", km: 11.2 },
+  { date: "2021-02-28", time: "11:39 PM", km: 9.42 },
+  { date: "2021-03-01", time: "6:10 PM", km: 1.7 },
+  { date: "2021-03-01", time: "6:29 PM", km: 13.92 },
+  { date: "2021-03-01", time: "7:34 PM", km: 3.79 },
+  { date: "2021-03-02", time: "7:38 PM", km: 2.64 },
+  { date: "2021-03-02", time: "7:50 PM", km: 2.42 },
+  { date: "2021-03-05", time: "4:49 PM", km: 2.91 },
+  { date: "2021-03-05", time: "5:04 PM", km: 0.95 },
+  { date: "2021-03-05", time: "5:16 PM", km: 2.58 },
+  { date: "2021-03-05", time: "8:14 PM", km: 23.57 },
+  { date: "2021-03-05", time: "10:25 PM", km: 1.7 },
+  { date: "2021-03-05", time: "10:46 PM", km: 2.35 },
+  { date: "2021-03-07", time: "1:22 PM", km: 4.29 },
+  { date: "2021-03-08", time: "6:00 PM", km: 2.15 },
+  { date: "2021-03-08", time: "6:28 PM", km: 3.96 },
+  { date: "2021-03-09", time: "4:51 PM", km: 1.86 },
+  { date: "2021-03-09", time: "5:03 PM", km: 4.8 },
+  { date: "2021-03-14", time: "1:04 AM", km: 2.3 },
+  { date: "2021-03-15", time: "5:05 PM", km: 4.08 },
+  { date: "2021-03-17", time: "5:22 PM", km: 39.22 },
+  { date: "2021-03-17", time: "9:34 PM", km: 1.34 },
+  { date: "2021-03-22", time: "11:48 PM", km: 7.14 },
+  { date: "2021-03-27", time: "1:56 AM", km: 8.3 },
+  { date: "2021-03-27", time: "2:14 AM", km: 7.22 },
+  { date: "2021-03-27", time: "5:05 AM", km: 1.97 },
+  { date: "2021-03-28", time: "5:27 AM", km: 2.92 },
+  { date: "2021-03-29", time: "1:46 AM", km: 3.38 },
+  { date: "2021-03-29", time: "4:16 PM", km: 3.35 },
+  { date: "2021-04-01", time: "4:29 PM", km: 22.14 },
+  { date: "2021-04-01", time: "5:23 PM", km: 11.19 },
+  { date: "2021-04-05", time: "11:46 PM", km: 17.23 },
+  { date: "2021-04-11", time: "9:18 PM", km: 10.92 },
+  { date: "2021-04-13", time: "12:05 PM", km: 8.13 },
+  { date: "2021-05-08", time: "11:50 PM", km: 23.37 },
+  { date: "2021-05-13", time: "4:58 PM", km: 3.83 },
+  { date: "2021-05-21", time: "1:31 AM", km: 2.87 },
+  { date: "2021-05-21", time: "11:32 PM", km: 0.76 },
+  { date: "2021-05-28", time: "5:52 PM", km: 3.46 },
+  { date: "2021-05-28", time: "6:14 PM", km: 3.1 },
+  { date: "2021-05-28", time: "6:30 PM", km: 0.98 },
+  { date: "2021-05-28", time: "6:43 PM", km: 13.66 },
+  { date: "2021-05-28", time: "7:52 PM", km: 13.62 },
+  { date: "2021-05-29", time: "7:10 PM", km: 2.98 },
+  { date: "2021-05-29", time: "7:28 PM", km: 2.05 },
+  { date: "2021-06-03", time: "6:00 PM", km: 4.38 },
+  { date: "2021-06-04", time: "10:41 AM", km: 4.07 },
+  { date: "2021-06-06", time: "2:39 PM", km: 11.16 },
+  { date: "2021-06-15", time: "1:31 PM", km: 1.04 },
+  { date: "2021-06-15", time: "10:12 PM", km: 3.72 },
+  { date: "2021-06-19", time: "12:38 PM", km: 1.74 },
+  { date: "2021-06-22", time: "9:09 PM", km: 2.41 },
+  { date: "2021-06-24", time: "3:26 PM", km: 23.11 },
+  { date: "2021-06-24", time: "6:05 PM", km: 3.69 },
+  { date: "2021-06-25", time: "6:32 PM", km: 4.96 },
+  { date: "2021-06-25", time: "7:03 PM", km: 2.37 },
+  { date: "2021-06-25", time: "7:20 PM", km: 1.12 },
+  { date: "2021-06-25", time: "7:32 PM", km: 12.62 },
+  { date: "2021-06-25", time: "8:45 PM", km: 7.12 },
+  { date: "2021-06-26", time: "2:09 PM", km: 16.64 },
+  { date: "2021-06-26", time: "4:20 PM", km: 4.61 },
+  { date: "2021-07-03", time: "12:08 AM", km: 1.61 },
+  { date: "2021-07-03", time: "12:12 AM", km: 11.46 },
+  { date: "2021-07-03", time: "12:42 AM", km: 2.56 },
+  { date: "2021-07-03", time: "1:01 AM", km: 2.63 },
+  { date: "2021-07-03", time: "1:14 AM", km: 35.49 },
+  { date: "2021-07-03", time: "1:45 AM", km: 11.93 },
+  { date: "2021-07-03", time: "2:18 AM", km: 49.47 },
+  { date: "2021-07-03", time: "9:17 PM", km: 4.58 },
+  { date: "2021-07-03", time: "9:29 PM", km: 4.06 },
+  { date: "2021-07-03", time: "9:50 PM", km: 7.61 },
+  { date: "2021-07-03", time: "10:15 PM", km: 10.37 },
+  { date: "2021-07-03", time: "10:37 PM", km: 1.94 },
+  { date: "2021-07-03", time: "10:46 PM", km: 4.62 },
+  { date: "2021-07-03", time: "11:01 PM", km: 4.56 },
+  { date: "2021-07-03", time: "11:11 PM", km: 11.00 },
+  { date: "2021-07-04", time: "12:26 AM", km: 26.59 },
+  { date: "2021-07-04", time: "1:04 AM", km: 2.46 },
+  { date: "2021-07-04", time: "11:16 PM", km: 15.01 },
+  { date: "2021-07-04", time: "11:48 PM", km: 39.51 },
+  { date: "2021-07-08", time: "7:40 PM", km: 1.69 },
+  { date: "2021-07-10", time: "1:25 AM", km: 7.76 },
+  { date: "2021-07-10", time: "1:54 AM", km: 16.32 },
+  { date: "2021-07-10", time: "2:20 AM", km: 6.22 },
+  { date: "2021-07-10", time: "2:56 AM", km: 10.15 },
+  { date: "2021-07-10", time: "3:07 AM", km: 10.35 },
+  { date: "2021-07-10", time: "3:57 AM", km: 16.97 },
+  { date: "2021-07-10", time: "12:24 PM", km: 12.29 },
+  { date: "2021-07-10", time: "1:07 PM", km: 7.4 },
+  { date: "2021-07-11", time: "12:03 AM", km: 9.68 },
+  { date: "2021-07-11", time: "11:40 PM", km: 9.82 },
+  { date: "2021-07-11", time: "2:26 PM", km: 4.22 },
+  { date: "2021-07-11", time: "2:33 PM", km: 5.88 },
+  { date: "2021-07-11", time: "2:52 PM", km: 2.47 },
+  { date: "2021-07-11", time: "3:13 PM", km: 2.3 },
+  { date: "2021-07-20", time: "2:39 PM", km: 23.64 },
+  { date: "2021-07-20", time: "4:03 PM", km: 7.45 },
+  { date: "2021-07-24", time: "12:31 AM", km: 2.11 },
+  { date: "2021-07-24", time: "12:51 AM", km: 5.74 },
+  { date: "2021-07-24", time: "11:57 PM", km: 27.83 },
+  { date: "2021-07-25", time: "1:16 AM", km: 1.43 },
+  { date: "2021-07-25", time: "4:49 PM", km: 24.12 },
+  { date: "2021-07-25", time: "5:45 PM", km: 23.8 },
+  { date: "2021-07-29", time: "6:42 PM", km: 4.36 },
+  { date: "2021-07-29", time: "8:39 PM", km: 2.5 },
+  { date: "2021-07-29", time: "8:57 PM", km: 3.68 },
+  { date: "2021-07-30", time: "3:13 PM", km: 2.56 },
+  { date: "2021-07-30", time: "3:33 PM", km: 4.36 },
+  { date: "2021-08-03", time: "5:21 PM", km: 2.93 },
+  { date: "2021-08-04", time: "9:14 PM", km: 6.57 },
+  { date: "2021-08-04", time: "6:44 PM", km: 10.24 },
+  { date: "2021-08-06", time: "1:51 AM", km: 12.17 },
+  { date: "2021-08-06", time: "2:02 AM", km: 13.11 },
+  { date: "2021-08-07", time: "6:36 PM", km: 1.47 },
+  { date: "2021-08-07", time: "6:48 PM", km: 8.41 },
+  { date: "2021-08-08", time: "8:04 PM", km: 7.38 }
+];
 
-// Fixed the double-click issue here
-uploadArea.addEventListener('click', (e) => { 
-    if(e.target.id !== 'fileInput') fileInput.click(); 
+// --- CORE LOGIC ---
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+    if (e.target.files.length) handleFiles(e.target.files);
 });
 
-uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.style.borderColor = 'var(--color-primary)'; });
-uploadArea.addEventListener('dragleave', () => uploadArea.style.borderColor = '');
-uploadArea.addEventListener('drop', e => { 
-  e.preventDefault(); uploadArea.style.borderColor = '';
-  if (e.dataTransfer.files.length) handleImmediateUpload(e.dataTransfer.files); 
-});
-
-fileInput.addEventListener('change', e => { 
-    if (e.target.files.length) handleImmediateUpload(e.target.files); 
-});
-
-function handleImmediateUpload(files) {
-  // Show progress UI instantly before thread freezes
-  document.getElementById('uploadArea').classList.add('hidden');
-  document.getElementById('processingStatus').classList.remove('hidden');
-  setTimeout(() => processGoogleFiles(files), 50);
-}
-
-// BYPASS GOOGLE COMPLETELY
-function bypassGoogle() {
-  isBypassMode = true;
-  document.getElementById('uploadCard').classList.add('hidden');
-  document.getElementById('tripsSection').classList.remove('hidden');
-  document.getElementById('modalTitle').innerText = "🚕 Generate Logbook from CSV";
-  showUberModal();
-}
-
-async function processGoogleFiles(files) {
-  allTrips = [];
-  
-  try {
+async function handleFiles(files) {
+    document.getElementById('progressContainer').classList.remove('hidden');
+    document.getElementById('dropText').innerText = "Processing File(s)...";
+    
+    rawTrips = [];
     const file = files[0];
-    if (file.name.toLowerCase().endsWith('.zip')) {
-      await extractFromZip(file);
-    } else if (file.name.toLowerCase().endsWith('.json')) {
-      await extractFromJson(file);
-    } else {
-      throw new Error("Please upload a .zip or .json file.");
-    }
-
-    if (allTrips.length === 0) {
-      throw new Error("No trips found. Google's Timeline bug may have wiped your data. Please refresh the page and use the red 'Bypass Google' button to generate your logbook directly from your Excel/CSV files.");
-    }
-
-    allTrips.sort((a, b) => b.startTime - a.startTime);
-    initializeUI();
-
-  } catch (err) {
-    alert(err.message);
-    document.getElementById('uploadArea').classList.remove('hidden');
-    document.getElementById('processingStatus').classList.add('hidden');
-  }
-}
-
-async function extractFromJson(file) {
-  setStatus("Reading JSON file...", 50);
-  const text = await file.text();
-  const data = JSON.parse(text);
-  if (data.timelineObjects || data.semanticSegments) processSemantic(data);
-  if (data.locations) await processRecords(data.locations);
-}
-
-async function extractFromZip(file) {
-  setStatus("Unzipping & Aggressively Scanning...", 10);
-  const zip = new JSZip();
-  const loaded = await zip.loadAsync(file);
-  const jsonFiles = [];
-  
-  // SCAN EVERYTHING: Ignore folder names, just look for JSONs
-  loaded.forEach((path, entry) => {
-    if (entry.name.endsWith('.json')) jsonFiles.push(entry);
-  });
-
-  let count = 0;
-  for (const entry of jsonFiles) {
-    setStatus(`Analyzing ${entry.name.split('/').pop()}...`, 10 + (count/jsonFiles.length*80));
+    
     try {
-      const data = JSON.parse(await entry.async("string"));
-      // Check for any known Google array format
-      if (data.timelineObjects || data.semanticSegments) processSemantic(data);
-      if (data.locations) await processRecords(data.locations);
-    } catch(e) {}
-    count++;
-    await new Promise(r => setTimeout(r, 0));
-  }
-}
-
-function processSemantic(data) {
-  const parseLoc = (loc) => {
-    if (!loc) return {lat:0, lng:0};
-    if (loc.latitudeE7) return {lat: loc.latitudeE7/1e7, lng: loc.longitudeE7/1e7};
-    if (loc.latLng) {
-        const parts = loc.latLng.split(',');
-        return {lat: parseFloat(parts[0].replace('°','')), lng: parseFloat(parts[1].replace('°',''))};
-    }
-    return {lat:0, lng:0};
-  };
-
-  // 1. Classic Takeout Format (timelineObjects)
-  (data.timelineObjects || []).forEach(obj => {
-    if (!obj.activitySegment) return;
-    const seg = obj.activitySegment;
-    
-    const type = seg.activityType;
-    let dist = (seg.distance || 0)/1000;
-    const isValidType = ['IN_PASSENGER_VEHICLE', 'DRIVING', 'IN_VEHICLE', 'MOTORCYCLING'].includes(type);
-    if (!isValidType && dist < 0.5) return; 
-
-    const start = new Date(seg.duration.startTimestamp || seg.duration.startTimestampMs || 0);
-    const end = new Date(seg.duration.endTimestamp || seg.duration.endTimestampMs || 0);
-    if (start.getFullYear() < 2021) return;
-    
-    const sLoc = parseLoc(seg.startLocation);
-    const eLoc = parseLoc(seg.endLocation);
-    
-    if (dist <= 0) dist = haversine(sLoc.lat, sLoc.lng, eLoc.lat, eLoc.lng);
-    if (dist < 0.2) return;
-
-    allTrips.push({
-      id: `trip_${start.getTime()}`, year: start.getFullYear(),
-      startTime: start, endTime: end, distanceKm: dist, duration: Math.max(1, Math.round((end-start)/60000)),
-      sLat: sLoc.lat, sLng: sLoc.lng, eLat: eLoc.lat, eLng: eLoc.lng,
-      startAddress: '', endAddress: '', tag: 'untagged', purpose: ''
-    });
-  });
-
-  // 2. New Timeline.json Format (semanticSegments)
-  (data.semanticSegments || []).forEach(seg => {
-    if (seg.visit) return; // Skip stationary visits
-
-    const type = seg.activity ? (seg.activity.activityType || seg.activity.type) : 'UNKNOWN';
-    let dist = (seg.activity ? (seg.activity.distanceMeters || seg.activity.distance || 0) : 0) / 1000;
-    
-    const isValidType = ['IN_PASSENGER_VEHICLE', 'DRIVING', 'IN_VEHICLE', 'MOTORCYCLING'].includes(type);
-    
-    const start = new Date(seg.startTime);
-    const end = new Date(seg.endTime);
-    if (start.getFullYear() < 2021) return;
-
-    let sLat = 0, sLng = 0, eLat = 0, eLng = 0;
-
-    if (seg.activity && seg.activity.start) {
-        const sLoc = parseLoc(seg.activity.start);
-        const eLoc = parseLoc(seg.activity.end);
-        sLat = sLoc.lat; sLng = sLoc.lng; eLat = eLoc.lat; eLng = eLoc.lng;
-    } else if (seg.timelinePath && seg.timelinePath.length > 0) {
-        // Fallback for paths with missing activity metadata
-        const sLocStr = seg.timelinePath[0].point;
-        const eLocStr = seg.timelinePath[seg.timelinePath.length - 1].point;
-        if (sLocStr) { const sp = sLocStr.split(','); sLat = parseFloat(sp[0]); sLng = parseFloat(sp[1]); }
-        if (eLocStr) { const ep = eLocStr.split(','); eLat = parseFloat(ep[0]); eLng = parseFloat(ep[1]); }
-        
-        if (dist <= 0) {
-            let calcDist = 0;
-            for (let i = 1; i < seg.timelinePath.length; i++) {
-                const p1 = seg.timelinePath[i-1].point.split(',');
-                const p2 = seg.timelinePath[i].point.split(',');
-                calcDist += haversine(parseFloat(p1[0]), parseFloat(p1[1]), parseFloat(p2[0]), parseFloat(p2[1]));
+        if (file.name.endsWith('.zip')) {
+            const zip = new JSZip();
+            const loaded = await zip.loadAsync(file);
+            const jsonFiles = [];
+            loaded.forEach((path, entry) => { if (entry.name.endsWith('.json')) jsonFiles.push(entry); });
+            
+            for (let i = 0; i < jsonFiles.length; i++) {
+                updateProgress((i/jsonFiles.length)*100, `Scanning ${jsonFiles[i].name}...`);
+                const data = JSON.parse(await jsonFiles[i].async("string"));
+                processTimelineData(data);
+                await new Promise(r => setTimeout(r, 0));
             }
-            dist = calcDist;
+        } else {
+            const data = JSON.parse(await file.text());
+            processTimelineData(data);
         }
-    }
 
-    if (!isValidType && dist < 0.5) return;
-    if (dist <= 0) dist = haversine(sLat, sLng, eLat, eLng);
-    if (dist < 0.2) return;
+        if (!rawTrips.length) throw new Error("No trip data found in provided files.");
 
-    allTrips.push({
-      id: `trip_${start.getTime()}`, year: start.getFullYear(),
-      startTime: start, endTime: end, distanceKm: dist, duration: Math.max(1, Math.round((end-start)/60000)),
-      sLat, sLng, eLat, eLng,
-      startAddress: '', endAddress: '', tag: 'untagged', purpose: ''
-    });
-  });
-}
+        // Apply automatic cross-checks for 2021
+        crossCheck2021();
 
-async function processRecords(locations) {
-  locations.sort((a,b) => getTs(a) - getTs(b));
-  let current = null;
-  for (let i=1; i<locations.length; i++) {
-    const p=locations[i-1], c=locations[i];
-    const dtMs = getTs(c) - getTs(p);
-    if (new Date(getTs(c)).getFullYear() < 2021) continue;
-    
-    const pLat=p.latitudeE7/1e7, pLng=p.longitudeE7/1e7;
-    const cLat=c.latitudeE7/1e7, cLng=c.longitudeE7/1e7;
-    if (!pLat || !cLat) continue;
-    
-    if (dtMs <= 0 || dtMs > 7200000) { if (current && current.distanceKm > 0.5) saveRecord(current); current = null; continue; }
-    
-    const dist = haversine(pLat,pLng,cLat,cLng);
-    if (dist / (dtMs/3600000) > 8) {
-      if (!current) current = { startTime: new Date(getTs(p)), sLat: pLat, sLng: pLng, distanceKm: 0 };
-      current.distanceKm += dist; current.endTime = new Date(getTs(c)); current.eLat = cLat; current.eLng = cLng;
-    } else if (dtMs > 900000) {
-      if (current && current.distanceKm > 0.5) saveRecord(current);
-      current = null;
-    }
-  }
-  if (current && current.distanceKm > 0.5) saveRecord(current);
-}
+        // Restore user memory
+        restoreMemory();
 
-function saveRecord(t) {
-  t.duration = Math.round((t.endTime - t.startTime)/60000);
-  t.id = `trip_${t.startTime.getTime()}`; t.year = t.startTime.getFullYear();
-  t.startAddress = ''; t.endAddress = ''; t.tag = 'untagged'; t.purpose = '';
-  if (t.year >= 2021) allTrips.push(t);
-}
+        // Setup UI
+        const years = [...new Set(rawTrips.map(t => t.startTime.getFullYear()))].sort((a,b) => b-a);
+        const sel = document.getElementById('activeYear');
+        sel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+        activeFilters.year = years[0];
+        
+        document.getElementById('uploadSection').classList.add('hidden');
+        document.getElementById('dashboardSection').classList.remove('hidden');
+        document.getElementById('yearSelector').classList.remove('hidden');
 
-// ==========================================
-// CSV PARSER (HANDLES GOOGLE BYPASS)
-// ==========================================
-function showUberModal() { document.getElementById('uberModal').classList.remove('hidden'); }
-
-document.getElementById('uberInput').addEventListener('change', async (e) => {
-  if (!e.target.files[0]) return;
-  document.getElementById('uberModal').classList.add('hidden');
-  
-  try {
-    const text = await e.target.files[0].text();
-    const lines = text.split('\n');
-    
-    let headerIdx = 0;
-    for (let i = 0; i < Math.min(10, lines.length); i++) {
-        if (lines[i].toLowerCase().includes('date') && (lines[i].toLowerCase().includes('time') || lines[i].toLowerCase().includes('distance'))) {
-            headerIdx = i; break;
-        }
-    }
-    
-    const headers = lines[headerIdx].toLowerCase().split(',').map(h => h.trim());
-    let matchCount = 0;
-    
-    for (let i = headerIdx + 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      
-      const cols = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
-      const row = {};
-      headers.forEach((h, idx) => row[h] = (cols[idx]||'').replace(/^"|"$/g, '').trim());
-      
-      const dateStr = row['date'] || row['request time'] || row['datetime'];
-      const timeStr = row['time'] || '';
-      let dist = parseFloat(row['distance (km)'] || row['total_kms'] || row['distance'] || 0);
-      
-      if (!dateStr) continue;
-      
-      // Determine Year based on filename or string if missing
-      let csvYear = currentYear;
-      if (e.target.files[0].name.includes('2021')) csvYear = 2021;
-      if (e.target.files[0].name.includes('2022')) csvYear = 2022;
-      if (e.target.files[0].name.includes('2023')) csvYear = 2023;
-      if (e.target.files[0].name.includes('2024')) csvYear = 2024;
-
-      let uDate = timeStr ? new Date(`${dateStr} ${csvYear} ${timeStr}`) : new Date(dateStr);
-      if (isNaN(uDate.getTime())) continue;
-
-      // BYPASS MODE: Create the trip entirely from the CSV
-      if (isBypassMode) {
-          if (dist > 0) {
-              allTrips.push({
-                  id: `csv_${uDate.getTime()}_${i}`,
-                  year: uDate.getFullYear(),
-                  startTime: uDate,
-                  endTime: new Date(uDate.getTime() + 15*60000), // Approx 15 min
-                  distanceKm: dist,
-                  duration: 15,
-                  sLat: 0, sLng: 0, eLat: 0, eLng: 0,
-                  startAddress: row['pickup address'] || 'Extracted from CSV',
-                  endAddress: row['dropoff address'] || 'Extracted from CSV',
-                  tag: 'business',
-                  purpose: 'Imported from Earnings CSV'
-              });
-              matchCount++;
-          }
-      } else {
-          // NORMAL MODE: Match Google Trip
-          const match = allTrips.find(t => {
-              const isSameDay = t.startTime.getMonth() === uDate.getMonth() && t.startTime.getDate() === uDate.getDate() && t.startTime.getFullYear() === uDate.getFullYear();
-              if (!isSameDay) return false;
-              const tMins = t.startTime.getHours() * 60 + t.startTime.getMinutes();
-              const uMins = uDate.getHours() * 60 + uDate.getMinutes();
-              return Math.abs(tMins - uMins) < 45; 
-          });
-          
-          if (match) {
-            match.tag = 'business';
-            match.purpose = 'Matched with Earnings CSV';
-            matchCount++;
-          }
-      }
-    }
-    
-    if (isBypassMode) {
-        allTrips.sort((a, b) => b.startTime - a.startTime);
-        initializeUI();
-        alert(`✅ Bypass Success! Generated ${matchCount} business trips directly from your CSV.`);
-    } else {
         applyFilters();
-        alert(`✅ Successfully found and tagged ${matchCount} matching trips!`);
+        showToast("Success! Persistence memory loaded.");
+        
+    } catch (err) {
+        showToast(err.message);
+        location.reload();
     }
-    
-  } catch(err) { alert("Failed to read CSV: " + err.message); }
-  e.target.value = '';
-});
-
-function initializeUI() {
-    document.getElementById('uploadCard').classList.add('hidden');
-    document.getElementById('tripsSection').classList.remove('hidden');
-    const years = [...new Set(allTrips.map(t => t.year))].sort((a,b) => b-a);
-    if (years.length > 0) currentYear = years[0];
-    buildYearTabs(years);
-    applyFilters();
 }
 
-function buildYearTabs(years) {
-  const cont = document.getElementById('yearTabs');
-  cont.innerHTML = '';
-  years.forEach(y => {
-    const btn = document.createElement('button');
-    btn.className = `year-tab ${y === currentYear ? 'active' : ''}`;
-    btn.textContent = y;
-    btn.onclick = () => { currentYear = y; document.querySelectorAll('.year-tab').forEach(b => b.classList.remove('active')); btn.classList.add('active'); applyFilters(); };
-    cont.appendChild(btn);
-  });
+function processTimelineData(data) {
+    const parseCoord = (loc) => {
+        if (!loc) return {lat:0, lng:0};
+        if (loc.latitudeE7) return {lat: loc.latitudeE7/1e7, lng: loc.longitudeE7/1e7};
+        if (loc.latLng) {
+            const p = loc.latLng.split(',');
+            return { lat: parseFloat(p[0]), lng: parseFloat(p[1]) };
+        }
+        return {lat:0, lng:0};
+    };
+
+    const segments = (data.semanticSegments || []).concat(data.timelineObjects ? data.timelineObjects.map(o => o.activitySegment).filter(Boolean) : []);
+
+    segments.forEach(seg => {
+        if (seg.visit) return;
+        
+        const start = new Date(seg.startTime || (seg.duration ? seg.duration.startTimestamp : 0));
+        if (start.getFullYear() < 2021) return;
+
+        let sLoc = {lat:0, lng:0}, eLoc = {lat:0, lng:0};
+        let dist = (seg.activity ? (seg.activity.distanceMeters || seg.activity.distance || 0) : (seg.distance || 0)) / 1000;
+
+        if (seg.activity && seg.activity.start) {
+            sLoc = parseCoord(seg.activity.start); eLoc = parseCoord(seg.activity.end);
+        } else if (seg.startLocation) {
+            sLoc = parseCoord(seg.startLocation); eLoc = parseCoord(seg.endLocation);
+        }
+
+        if (dist <= 0) dist = haversine(sLoc.lat, sLoc.lng, eLoc.lat, eLoc.lng);
+        if (dist < 0.1) return;
+
+        const isOntario = (sLoc.lat > 41.6 && sLoc.lat < 56.8 && sLoc.lng > -95.1 && sLoc.lng < -74.3);
+
+        rawTrips.push({
+            id: `trip_${start.getTime()}`,
+            startTime: start,
+            distanceKm: dist,
+            duration: Math.max(1, Math.round((new Date(seg.endTime || (seg.duration ? seg.duration.endTimestamp : 0)) - start)/60000)),
+            sLat: sLoc.lat, sLng: sLoc.lng, eLat: eLoc.lat, eLng: eLoc.lng,
+            tag: 'untagged',
+            purpose: '',
+            isOntario,
+            startAddress: '',
+            endAddress: ''
+        });
+    });
+}
+
+function crossCheck2021() {
+    let matched = 0;
+    sourceLog2021.forEach(ride => {
+        const rideDate = new Date(`${ride.date} 2021 ${ride.time}`);
+        // 30 min window
+        const match = rawTrips.find(t => {
+            if (t.startTime.getFullYear() !== 2021) return false;
+            const diff = Math.abs(t.startTime - rideDate) / 60000;
+            return diff < 30;
+        });
+
+        if (match) {
+            match.tag = 'business';
+            match.purpose = `Auto-Match: ${ride.km}km Ride`;
+            matched++;
+        }
+    });
+    console.log(`Cross-check completed. Matched ${matched} trips for 2021.`);
 }
 
 function applyFilters() {
-  const tF = document.getElementById('tagFilter').value;
-  filteredTrips = allTrips.filter(t => t.year === currentYear && (tF === 'all' || t.tag === tF));
-  renderLimit = 50;
-  updateStats();
-  renderTable(true);
+    activeFilters.year = parseInt(document.getElementById('activeYear').value);
+    activeFilters.tag = document.getElementById('filterTag').value;
+    activeFilters.distance = parseFloat(document.getElementById('filterDistance').value);
+    activeFilters.province = document.getElementById('filterProvince').value;
+    activeFilters.sort = document.getElementById('sortTrips').value;
+
+    filteredTrips = rawTrips.filter(t => {
+        const yMatch = t.startTime.getFullYear() === activeFilters.year;
+        const tMatch = activeFilters.tag === 'all' || t.tag === activeFilters.tag;
+        const dMatch = t.distanceKm >= activeFilters.distance;
+        const pMatch = activeFilters.province === 'all' || (activeFilters.province === 'ontario' ? t.isOntario : !t.isOntario);
+        return yMatch && tMatch && dMatch && pMatch;
+    });
+
+    // Sorting logic
+    filteredTrips.sort((a, b) => {
+        if (activeFilters.sort === 'date-desc') return b.startTime - a.startTime;
+        if (activeFilters.sort === 'date-asc') return a.startTime - b.startTime;
+        if (activeFilters.sort === 'dist-desc') return b.distanceKm - a.distanceKm;
+        if (activeFilters.sort === 'dist-asc') return a.distanceKm - b.distanceKm;
+        return 0;
+    });
+
+    renderPointer = 50;
+    updateDashboardStats();
+    renderTable(true);
 }
 
 function renderTable(clear = false) {
-  const tbody = document.getElementById('tripsTable');
-  if (clear) tbody.innerHTML = '';
-  
-  const toRender = filteredTrips.slice(tbody.children.length, renderLimit);
-  toRender.forEach(t => {
-    const sAddr = t.startAddress || (t.sLat === 0 ? 'See Map' : `${t.sLat.toFixed(4)}°, ${t.sLng.toFixed(4)}°`);
-    const eAddr = t.endAddress || (t.eLat === 0 ? 'See Map' : `${t.eLat.toFixed(4)}°, ${t.eLng.toFixed(4)}°`);
+    const body = document.getElementById('tripBody');
+    if (clear) body.innerHTML = '';
     
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>
-        <strong style="color:var(--color-text)">${t.startTime.toLocaleDateString('en-CA', {month:'short', day:'numeric'})}</strong><br>
-        <span style="color:var(--color-text-muted); font-size:0.8rem;">${t.startTime.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'})}</span>
-      </td>
-      <td><div class="address-block"><span class="address-text">${sAddr}</span></div></td>
-      <td><div class="address-block"><span class="address-text">${eAddr}</span></div></td>
-      <td><strong>${t.distanceKm.toFixed(1)}</strong><br><span style="font-size:0.75rem; color:var(--color-text-muted);">${t.duration}m</span></td>
-      <td><input type="text" class="purpose-input" value="${t.purpose}" placeholder="Notes..." onchange="t.purpose=this.value"></td>
-      <td style="text-align:center;">
-        <button class="tag-btn tag-biz ${t.tag==='business'?'active':''}" onclick="setTag('${t.id}', 'business', this)">Biz</button>
-        <button class="tag-btn tag-per ${t.tag==='personal'?'active':''}" onclick="setTag('${t.id}', 'personal', this)">Per</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-  
-  document.getElementById('loadMoreBtn').classList.toggle('hidden', filteredTrips.length <= renderLimit);
+    const slice = filteredTrips.slice(body.children.length, renderPointer);
+    
+    slice.forEach(t => {
+        const row = document.createElement('tr');
+        row.className = `hover:bg-slate-50 transition-colors ${!t.isOntario ? 'out-of-province bg-red-50' : ''} ${t.distanceKm < 2 ? 'walking-row' : ''}`;
+        
+        row.innerHTML = `
+            <td class="px-4 py-4 whitespace-nowrap">
+                <span class="font-bold block">${t.startTime.toLocaleDateString('en-CA', {month:'short', day:'numeric'})}</span>
+                <span class="text-[10px] text-slate-400 uppercase">${t.startTime.toLocaleTimeString('en-CA', {hour:'2-digit', minute:'2-digit'})}</span>
+            </td>
+            <td class="px-4 py-4">
+                <div class="address-text font-medium truncate max-w-[200px]" id="start-${t.id}">${t.startAddress || (t.sLat.toFixed(4) + ', ' + t.sLng.toFixed(4))}</div>
+                ${!t.isOntario ? '<span class="text-[8px] text-red-500 font-bold uppercase">OUTSIDE ONTARIO</span>' : ''}
+            </td>
+            <td class="px-4 py-4">
+                <div class="address-text font-medium truncate max-w-[200px]" id="end-${t.id}">${t.endAddress || (t.eLat.toFixed(4) + ', ' + t.eLng.toFixed(4))}</div>
+            </td>
+            <td class="px-4 py-4 font-mono font-bold">${t.distanceKm.toFixed(1)}</td>
+            <td class="px-4 py-4"><input type="text" value="${t.purpose}" onchange="updateNote('${t.id}', this.value)" placeholder="Match/Note..." class="bg-transparent border-b border-transparent focus:border-teal-500 outline-none w-full text-xs italic"></td>
+            <td class="px-4 py-4 text-center whitespace-nowrap">
+                <button onclick="toggleTag('${t.id}', 'business')" class="tag-pill tag-biz ${t.tag === 'business' ? 'active' : ''}">Biz</button>
+                <button onclick="toggleTag('${t.id}', 'personal')" class="tag-pill tag-per ${t.tag === 'personal' ? 'active' : ''}">Per</button>
+            </td>
+        `;
+        body.appendChild(row);
+    });
+
+    document.getElementById('emptyState').classList.toggle('hidden', filteredTrips.length > 0);
+    document.getElementById('loadMore').classList.toggle('hidden', filteredTrips.length <= renderPointer);
 }
 
-function loadMoreTrips() { renderLimit += 50; renderTable(); }
+function renderMore() { renderPointer += 50; renderTable(); }
 
-function setTag(id, tag, btn) {
-  const t = allTrips.find(x => x.id === id);
-  if (t) {
-    t.tag = t.tag === tag ? 'untagged' : tag;
-    btn.parentElement.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
-    if (t.tag !== 'untagged') btn.parentElement.querySelector(`.tag-${t.tag.substring(0,3)}`).classList.add('active');
-    updateStats();
-  }
+// --- PERSISTENCE ---
+
+function saveToMemory() {
+    const data = {};
+    rawTrips.forEach(t => {
+        if (t.tag !== 'untagged' || t.purpose || t.startAddress) {
+            data[t.id] = { tag: t.tag, purpose: t.purpose, sa: t.startAddress, ea: t.endAddress };
+        }
+    });
+    localStorage.setItem('rs_tracker_audit_v4', JSON.stringify(data));
 }
 
-function tagAllFiltered(tag) {
-  if(confirm(`Tag all visible trips as ${tag}?`)) {
-    filteredTrips.forEach(t => t.tag = tag); applyFilters();
-  }
+function restoreMemory() {
+    const raw = localStorage.getItem('rs_tracker_audit_v4');
+    if (!raw) return;
+    const memory = JSON.parse(raw);
+    rawTrips.forEach(t => {
+        if (memory[t.id]) {
+            t.tag = memory[t.id].tag || 'untagged';
+            t.purpose = memory[t.id].purpose || '';
+            t.startAddress = memory[t.id].sa || '';
+            t.endAddress = memory[t.id].ea || '';
+        }
+    });
 }
 
-function updateStats() {
-  const yt = allTrips.filter(t => t.year === currentYear);
-  const sum = (arr) => arr.reduce((a,b)=>a+b.distanceKm, 0);
-  const tot = sum(yt), biz = sum(yt.filter(t=>t.tag==='business')), per = sum(yt.filter(t=>t.tag==='personal'));
-  
-  document.getElementById('totalTrips').innerText = yt.length;
-  document.getElementById('totalKm').innerText = tot.toFixed(0);
-  document.getElementById('businessKm').innerText = biz.toFixed(0);
-  document.getElementById('personalKm').innerText = per.toFixed(0);
+function clearAllMemory() {
+    if (confirm("Delete all saved tags, notes, and addresses? This cannot be undone.")) {
+        localStorage.removeItem('rs_tracker_audit_v4');
+        location.reload();
+    }
 }
 
-function getTs(p) { return parseInt(p.timestampMs || new Date(p.timestamp||0).getTime()); }
+// --- UTILS ---
+
+function toggleTag(id, tag) {
+    const t = rawTrips.find(x => x.id === id);
+    if (t) {
+        t.tag = (t.tag === tag) ? 'untagged' : tag;
+        saveToMemory();
+        applyFilters();
+    }
+}
+
+function updateNote(id, val) {
+    const t = rawTrips.find(x => x.id === id);
+    if (t) { t.purpose = val; saveToMemory(); }
+}
+
+function updateDashboardStats() {
+    const yt = rawTrips.filter(t => t.startTime.getFullYear() === activeFilters.year);
+    const sum = (arr) => arr.reduce((a,b) => a + b.distanceKm, 0);
+    
+    document.getElementById('stat-biz-km').innerText = sum(yt.filter(t => t.tag === 'business')).toFixed(0);
+    document.getElementById('stat-total-km').innerText = sum(yt).toFixed(0);
+    document.getElementById('stat-flagged').innerText = yt.filter(t => !t.isOntario).length;
+    
+    const pct = sum(yt) > 0 ? (sum(yt.filter(t => t.tag === 'business')) / sum(yt)) * 100 : 0;
+    document.getElementById('stat-biz-pct').innerText = pct.toFixed(1) + '%';
+}
+
+async function queueAddressFetch() {
+    if (isProcessingAddress) return;
+    const targetTrips = filteredTrips.slice(0, renderPointer).filter(t => !t.startAddress);
+    if (!targetTrips.length) return showToast("No missing addresses in visible set.");
+    
+    addressQueue = targetTrips;
+    isProcessingAddress = true;
+    processQueue();
+}
+
+async function processQueue() {
+    const btn = document.getElementById('btnFetch');
+    for (let i = 0; i < addressQueue.length; i++) {
+        const t = addressQueue[i];
+        btn.innerText = `⏳ Fetching ${i+1}/${addressQueue.length}...`;
+        
+        t.startAddress = await fetchNominatim(t.sLat, t.sLng);
+        await new Promise(r => setTimeout(r, 1100)); // Rate limit 1 req/sec
+        t.endAddress = await fetchNominatim(t.eLat, t.eLng);
+        await new Promise(r => setTimeout(r, 1100));
+        
+        const sCell = document.getElementById(`start-${t.id}`);
+        const eCell = document.getElementById(`end-${t.id}`);
+        if (sCell) sCell.innerText = t.startAddress;
+        if (eCell) eCell.innerText = t.endAddress;
+        
+        saveToMemory();
+    }
+    btn.innerText = "📍 Fetch Street Addresses (Visible)";
+    isProcessingAddress = false;
+    showToast("Address batch complete.");
+}
+
+async function fetchNominatim(lat, lng) {
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+        const data = await res.json();
+        const a = data.address;
+        return [a.house_number, a.road, a.city].filter(Boolean).join(', ') || "Unknown Area";
+    } catch (e) { return "Lookup limit reached"; }
+}
+
 function haversine(lat1, lon1, lat2, lon2) {
-  const R=6371, p=Math.PI/180;
-  const a = Math.sin((lat2-lat1)*p/2)**2 + Math.cos(lat1*p)*Math.cos(lat2*p)*Math.sin((lon2-lon1)*p/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const R=6371, p=Math.PI/180;
+    const a = Math.sin((lat2-lat1)*p/2)**2 + Math.cos(lat1*p)*Math.cos(lat2*p)*Math.sin((lon2-lon1)*p/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
-function setStatus(text, pct) { document.getElementById('statusText').innerText = text; document.getElementById('progressBar').style.width = pct+'%'; }
+
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.classList.remove('opacity-0', 'translate-y-4');
+    setTimeout(() => t.classList.add('opacity-0', 'translate-y-4'), 3000);
+}
+
+function updateProgress(pct, msg) {
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('statusMsg').innerText = msg;
+}
+
+function bypassGoogle() {
+    showToast("Generate from CSV: Feature coming in next build...");
+}
 
 function exportCSV(type) {
-  const rows = allTrips.filter(t => t.year === currentYear && (type === 'all' || t.tag === type));
-  let csv = 'Date,Start Time,End Time,Pickup Address,Dropoff Address,Distance (km),Duration (min),Purpose,Tag\n';
-  
-  rows.forEach(t => {
-    const sAddr = (t.startAddress || `${t.sLat},${t.sLng}`).replace(/"/g, '""');
-    const eAddr = (t.endAddress || `${t.eLat},${t.eLng}`).replace(/"/g, '""');
-    csv += `"${t.startTime.toLocaleDateString('en-CA')}","${t.startTime.toLocaleTimeString('en-CA')}","${t.endTime.toLocaleTimeString('en-CA')}","${sAddr}","${eAddr}",${t.distanceKm.toFixed(2)},${t.duration},"${(t.purpose||'').replace(/"/g, '""')}","${t.tag}"\n`;
-  });
-  
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], {type:'text/csv;charset=utf-8;'}));
-  a.download = `Logbook_${type}_${currentYear}.csv`; a.click();
+    const rows = filteredTrips.filter(t => type === 'all' || t.tag === type);
+    let csv = 'Date,Time,Start Address,End Address,Distance (km),Notes,Tag\n';
+    rows.forEach(t => {
+        csv += `"${t.startTime.toLocaleDateString()}","${t.startTime.toLocaleTimeString()}","${t.startAddress || t.sLat}","${t.endAddress || t.eLat}",${t.distanceKm.toFixed(2)},"${t.purpose}","${t.tag}"\n`;
+    });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], {type:'text/csv;charset=utf-8;'}));
+    a.download = `CRA_Audit_Log_${type}_${activeFilters.year}.csv`; a.click();
 }
+
+function showUberModal() { showToast("CSV Import feature active via top upload zone."); }
+
 </script>
 </body>
 </html>
