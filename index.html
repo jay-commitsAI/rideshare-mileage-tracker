@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rideshare Mileage Tracker - Ultimate Audit Edition with Exclusion</title>
+<title>Rideshare Mileage Tracker - Ultimate Audit Edition</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -308,8 +308,10 @@ async function processFiles(files) {
 function populateYearSelector() {
     const years = [...new Set(rawTrips.map(t => t.startTime.getFullYear()))].sort((a,b) => b-a);
     const sel = document.getElementById('activeYear');
-    sel.innerHTML = '<option value="all">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
-    document.getElementById('yearSelector').classList.remove('hidden');
+    if (sel) {
+      sel.innerHTML = '<option value="all">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+    }
+    document.getElementById('yearSelector')?.classList.remove('hidden');
 }
 
 function parseData(data) {
@@ -387,10 +389,10 @@ function isBroad(addr) {
 }
 
 function applyFilters() {
-    const tagF = document.getElementById('filterTag').value;
-    const smartF = document.getElementById('filterSmart').value;
-    const sortF = document.getElementById('filterSort').value;
-    const yearF = document.getElementById('activeYear').value;
+    const tagF = document.getElementById('filterTag')?.value || 'all';
+    const smartF = document.getElementById('filterSmart')?.value || 'none';
+    const sortF = document.getElementById('filterSort')?.value || 'date-desc';
+    const yearF = document.getElementById('activeYear')?.value || 'all';
 
     filteredTrips = rawTrips.filter(t => {
         if (yearF !== 'all' && t.startTime.getFullYear().toString() !== yearF) return false;
@@ -425,6 +427,7 @@ function applyFilters() {
 
 function renderTable() {
     const body = document.getElementById('tripBody');
+    if (!body) return;
     body.innerHTML = '';
     const start = (currentPage - 1) * pageSize;
     const slice = filteredTrips.slice(start, start + pageSize);
@@ -459,9 +462,11 @@ function renderTable() {
 
 function renderPaginationControls() {
     const container = document.getElementById('paginationContainer');
+    if (!container) return;
     const totalPages = Math.ceil(filteredTrips.length / pageSize) || 1;
     container.innerHTML = '';
-    document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages} (${filteredTrips.length} trips)`;
+    const pInfo = document.getElementById('pageInfo');
+    if (pInfo) pInfo.innerText = `Page ${currentPage} of ${totalPages} (${filteredTrips.length} trips)`;
     const start = Math.max(1, currentPage - 2);
     const end = Math.min(totalPages, start + 4);
     for (let i = start; i <= end; i++) {
@@ -488,7 +493,7 @@ async function queueAddressFetch() {
     const btn = document.getElementById('btnFetch');
     for (let i = 0; i < targets.length; i++) {
         const t = targets[i];
-        btn.innerText = `⏳ Processing ${i+1}/${targets.length}...`;
+        if (btn) btn.innerText = `⏳ Processing ${i+1}/${targets.length}...`;
         t.startAddress = await fetchNominatim(t.sLat, t.sLng);
         await new Promise(r => setTimeout(r, 1100));
         t.endAddress = await fetchNominatim(t.eLat, t.eLng);
@@ -496,7 +501,7 @@ async function queueAddressFetch() {
         updateRowUI(t);
         saveMemory();
     }
-    btn.innerText = "📍 Fetch Addresses (This Page)";
+    if (btn) btn.innerText = "📍 Fetch Addresses (This Page)";
     isFetching = false;
 }
 
@@ -563,14 +568,13 @@ function updateNote(id, val) {
 }
 
 function updateStats() {
-    const yearF = document.getElementById('activeYear').value;
+    const yearF = document.getElementById('activeYear')?.value || 'all';
     const tripsForStats = yearF === 'all' 
         ? rawTrips 
         : rawTrips.filter(t => t.startTime.getFullYear().toString() === yearF);
 
     const sum = (arr) => arr.reduce((a,b) => a + b.distanceKm, 0);
     
-    // CAR TOTAL = (Biz + Per + Rev + Untagged) - Exclude
     const carTrips = tripsForStats.filter(t => t.tag !== 'exclude');
     const bizTrips = tripsForStats.filter(t => t.tag === 'business');
     const exclTrips = tripsForStats.filter(t => t.tag === 'exclude');
@@ -580,15 +584,24 @@ function updateStats() {
     const carKm = sum(carTrips);
     const exclKm = sum(exclTrips);
 
-    document.getElementById('stat-biz').innerText = Math.round(bizKm);
-    document.getElementById('stat-total').innerText = Math.round(carKm);
-    document.getElementById('stat-excl').innerText = Math.round(exclKm);
-    document.getElementById('stat-flag').innerText = reviewTrips.length;
+    const elBiz = document.getElementById('stat-biz');
+    const elTotal = document.getElementById('stat-total');
+    const elExcl = document.getElementById('stat-excl');
+    const elFlag = document.getElementById('stat-flag');
+    const elMix = document.getElementById('stat-mix');
+    const elYear = document.getElementById('yearDisplay');
+
+    if (elBiz) elBiz.innerText = Math.round(bizKm);
+    if (elTotal) elTotal.innerText = Math.round(carKm);
+    if (elExcl) elExcl.innerText = Math.round(exclKm);
+    if (elFlag) elFlag.innerText = reviewTrips.length;
     
-    const mix = carKm > 0 ? (bizKm / carKm) * 100 : 0;
-    document.getElementById('stat-mix').innerText = mix.toFixed(1) + '%';
+    if (elMix) {
+      const mix = carKm > 0 ? (bizKm / carKm) * 100 : 0;
+      elMix.innerText = mix.toFixed(1) + '%';
+    }
     
-    document.getElementById('yearDisplay').innerText = yearF === 'all' ? 'Lifetime Summary' : `${yearF} Summary`;
+    if (elYear) elYear.innerText = yearF === 'all' ? 'Lifetime Summary' : `${yearF} Summary`;
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -598,8 +611,10 @@ function haversine(lat1, lon1, lat2, lon2) {
 }
 
 function updateProgress(pct, msg) {
-    document.getElementById('progressBar').style.width = pct + '%';
-    document.getElementById('statusMsg').innerText = msg;
+    const pBar = document.getElementById('progressBar');
+    const sMsg = document.getElementById('statusMsg');
+    if (pBar) pBar.style.width = pct + '%';
+    if (sMsg) sMsg.innerText = msg;
 }
 
 function getTs(p) { return parseInt(p.timestampMs || new Date(p.timestamp||0).getTime()); }
