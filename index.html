@@ -32,7 +32,7 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
 <body class="min-h-screen flex flex-col">
 
 <header class="bg-slate-900 text-white py-6 shadow-xl">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:row justify-between items-center">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
     <div class="text-center md:text-left mb-4 md:mb-0">
       <h1 class="text-2xl font-bold tracking-tight">🚗 Rideshare Mileage Tracker</h1>
       <p class="text-slate-400 text-sm mt-1">Ultimate Audit Edition: Street Filters & Raw GPS Export</p>
@@ -54,7 +54,7 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
       
       <div id="dropZone" onclick="document.getElementById('fileInput').click()" class="mt-8 border-2 border-dashed border-slate-300 rounded-xl p-16 hover:border-teal-500 hover:bg-slate-50 transition-all cursor-pointer relative">
         <input type="file" id="fileInput" accept=".json,.zip" class="hidden">
-        <p class="text-slate-500"><strong>Drag files here</strong> or click to select</p>
+        <p id="dropText" class="text-slate-500"><strong>Drag files here</strong> or click to select</p>
         <button class="mt-4 bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-bold pointer-events-none">Select File</button>
       </div>
 
@@ -85,12 +85,12 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
         <div id="stat-flag" class="text-3xl font-bold text-amber-600">0</div>
       </div>
       <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Working Year</h3>
-        <div id="yearDisplay" class="text-3xl font-bold text-slate-800">2021</div>
+        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status Summary</h3>
+        <div id="yearDisplay" class="text-xl font-bold text-slate-800">Reviewing Trips</div>
       </div>
     </div>
 
-    <!-- Filters Section -->
+    <!-- Explorer -->
     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
       <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
         <h2 class="text-lg font-bold text-slate-800">Trip Detail Explorer</h2>
@@ -117,7 +117,7 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
             <option value="broad">Broad Locations (Manual Review)</option>
             <option value="personal_streets">Prudential / Hopewell (Personal)</option>
             <option value="out_of_province">Outside Ontario</option>
-            <option value="walks">Walking Distance (< 2km)</option>
+            <option value="walks">Walking Distance (&lt; 2km)</option>
           </select>
         </div>
         <div class="flex flex-col">
@@ -136,7 +136,6 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
         </div>
       </div>
 
-      <!-- Table -->
       <div class="table-wrap">
         <table class="w-full text-left border-collapse">
           <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold tracking-widest border-b border-slate-100">
@@ -154,12 +153,9 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
           </tbody>
         </table>
         
-        <!-- Pagination UI -->
         <div class="p-4 bg-slate-50 flex items-center justify-between border-t border-slate-100">
             <div id="pageInfo" class="text-xs text-slate-500 font-medium">Page 1 of 1</div>
-            <div id="paginationContainer" class="flex gap-1">
-                <!-- Page numbers dynamic -->
-            </div>
+            <div id="paginationContainer" class="flex gap-1"></div>
             <div class="flex gap-2">
                 <button id="prevBtn" onclick="changePage(-1)" class="pagination-btn">Prev</button>
                 <button id="nextBtn" onclick="changePage(1)" class="pagination-btn">Next</button>
@@ -171,20 +167,15 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
 </main>
 
 <script>
-// --- CONFIG & STATE ---
 let rawTrips = [];
 let filteredTrips = [];
 let currentPage = 1;
 const pageSize = 20;
 let isFetching = false;
 
-// Bounding Box for Ontario (Rough approx)
 const ONTARIO_BOUNDS = { latMin: 41.6, latMax: 56.8, lngMin: -95.2, lngMax: -74.3 };
-
-// Common broad city names for filtering
 const BROAD_CITIES = ["toronto", "scarborough", "north york", "etobicoke", "mississauga", "brampton", "vaughan", "markham", "richmond hill"];
 
-// --- 2021 AUTO-MATCH DATA (User Provided) ---
 const sourceLog2021 = [
   { date: "2021-02-28", time: "5:43 PM", km: 11.2 }, { date: "2021-02-28", time: "11:39 PM", km: 9.42 },
   { date: "2021-03-01", time: "6:10 PM", km: 1.7 }, { date: "2021-03-01", time: "6:29 PM", km: 13.92 },
@@ -246,15 +237,15 @@ const sourceLog2021 = [
   { date: "2021-08-07", time: "6:48 PM", km: 8.41 }, { date: "2021-08-08", time: "8:04 PM", km: 7.38 }
 ];
 
-// --- LOGIC ---
-
 const fileInput = document.getElementById('fileInput');
 
+// Use a consistent listener and prevent double windows
 fileInput.addEventListener('change', e => { 
     if (e.target.files.length) {
+        const files = e.target.files;
         document.getElementById('uploadCard').classList.add('hidden');
         document.getElementById('progressContainer').classList.remove('hidden');
-        setTimeout(() => processFiles(e.target.files), 50);
+        setTimeout(() => processFiles(files), 100);
     }
 });
 
@@ -280,16 +271,15 @@ async function processFiles(files) {
 
         if (!rawTrips.length) throw new Error("No trip data found.");
 
-        // Data processing steps
         autoMatch2021();
         restoreMemory(); 
         
-        document.getElementById('uploadCard').classList.add('hidden');
+        document.getElementById('progressContainer').classList.add('hidden');
         document.getElementById('dashboardSection').classList.remove('hidden');
         applyFilters();
 
     } catch (err) {
-        alert(err.message);
+        alert("Extraction Error: " + err.message);
         location.reload();
     }
 }
@@ -316,10 +306,13 @@ function parseData(data) {
         let sLoc = {lat:0, lng:0}, eLoc = {lat:0, lng:0};
         let dist = (seg.activity ? (seg.activity.distanceMeters || seg.activity.distance || 0) : (seg.distance || 0)) / 1000;
 
+        // FIXED: referencing 'seg.activity' instead of undefined 'activity'
         if (seg.activity && seg.activity.start) {
-            sLoc = parseCoord(activity.start); eLoc = parseCoord(activity.end);
+            sLoc = parseCoord(seg.activity.start); 
+            eLoc = parseCoord(seg.activity.end);
         } else if (seg.startLocation) {
-            sLoc = parseCoord(seg.startLocation); eLoc = parseCoord(seg.endLocation);
+            sLoc = parseCoord(seg.startLocation); 
+            eLoc = parseCoord(seg.endLocation);
         } else if (seg.timelinePath && seg.timelinePath.length > 0) {
             sLoc = parseCoord({latLng: seg.timelinePath[0].point});
             eLoc = parseCoord({latLng: seg.timelinePath[seg.timelinePath.length-1].point});
@@ -351,7 +344,6 @@ function autoMatch2021() {
         const rideTime = new Date(`${ride.date} ${ride.time}`);
         const match = rawTrips.find(t => {
             if (t.startTime.getFullYear() !== 2021) return false;
-            // 30 min window
             return Math.abs(t.startTime - rideTime) / 60000 < 30;
         });
         if (match) {
@@ -364,7 +356,6 @@ function autoMatch2021() {
 function isBroad(addr) {
     if (!addr) return true;
     const clean = addr.toLowerCase().trim();
-    // Logic: If it is exactly a city name or has no comma (indicating no street/number)
     return BROAD_CITIES.includes(clean) || !clean.includes(',');
 }
 
@@ -404,32 +395,23 @@ function applyFilters() {
 function renderTable() {
     const body = document.getElementById('tripBody');
     body.innerHTML = '';
-    
     const start = (currentPage - 1) * pageSize;
     const slice = filteredTrips.slice(start, start + pageSize);
 
     slice.forEach(t => {
         const tr = document.createElement('tr');
         tr.className = `hover:bg-slate-50 transition-colors ${!t.isOntario ? 'out-of-prov bg-red-50' : ''}`;
-        
         const sDisplay = t.startAddress || `${t.sLat.toFixed(4)}, ${t.sLng.toFixed(4)}`;
         const eDisplay = t.endAddress || `${t.eLat.toFixed(4)}, ${t.eLng.toFixed(4)}`;
-
         tr.innerHTML = `
             <td class="px-4 py-4 whitespace-nowrap">
                 <span class="font-bold block">${t.startTime.toLocaleDateString('en-CA', {month:'short', day:'numeric'})}</span>
                 <span class="text-[10px] text-slate-400 uppercase">${t.startTime.toLocaleTimeString('en-CA', {hour:'2-digit', minute:'2-digit'})}</span>
             </td>
-            <td class="px-4 py-4">
-                <div id="start-${t.id}" class="truncate max-w-[220px] ${isBroad(sDisplay) ? 'broad-loc' : 'font-medium'}">${sDisplay}</div>
-            </td>
-            <td class="px-4 py-4">
-                <div id="end-${t.id}" class="truncate max-w-[220px] ${isBroad(eDisplay) ? 'broad-loc' : 'font-medium'}">${eDisplay}</div>
-            </td>
+            <td class="px-4 py-4 truncate max-w-[220px] ${isBroad(sDisplay) ? 'broad-loc' : 'font-medium'}" id="start-${t.id}">${sDisplay}</td>
+            <td class="px-4 py-4 truncate max-w-[220px] ${isBroad(eDisplay) ? 'broad-loc' : 'font-medium'}" id="end-${t.id}">${eDisplay}</td>
             <td class="px-4 py-4 font-mono font-bold">${t.distanceKm.toFixed(1)}</td>
-            <td class="px-4 py-4">
-                <input type="text" value="${t.purpose}" onchange="updateNote('${t.id}', this.value)" placeholder="Match/Note..." class="bg-transparent border-b border-transparent focus:border-teal-500 outline-none w-full text-xs italic">
-            </td>
+            <td class="px-4 py-4"><input type="text" value="${t.purpose}" onchange="updateNote('${t.id}', this.value)" class="bg-transparent border-b border-transparent focus:border-teal-500 outline-none w-full text-xs italic"></td>
             <td class="px-4 py-4 text-center">
                 <div class="flex gap-1 justify-center">
                     <button onclick="toggleTag('${t.id}', 'business')" class="tag-pill tag-biz ${t.tag === 'business' ? 'active' : ''}">Biz</button>
@@ -439,7 +421,6 @@ function renderTable() {
         `;
         body.appendChild(tr);
     });
-
     renderPaginationControls();
 }
 
@@ -447,15 +428,9 @@ function renderPaginationControls() {
     const container = document.getElementById('paginationContainer');
     const totalPages = Math.ceil(filteredTrips.length / pageSize) || 1;
     container.innerHTML = '';
-
     document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages} (${filteredTrips.length} trips)`;
-    document.getElementById('prevBtn').disabled = currentPage === 1;
-    document.getElementById('nextBtn').disabled = currentPage === totalPages;
-
-    // Smart pagination: show 5 pages around current
     const start = Math.max(1, currentPage - 2);
     const end = Math.min(totalPages, start + 4);
-
     for (let i = start; i <= end; i++) {
         const btn = document.createElement('button');
         btn.className = `pagination-btn ${i === currentPage ? 'active' : ''}`;
@@ -466,34 +441,28 @@ function renderPaginationControls() {
 }
 
 function changePage(dir) {
-    currentPage += dir;
+    const totalPages = Math.ceil(filteredTrips.length / pageSize) || 1;
+    currentPage = Math.max(1, Math.min(totalPages, currentPage + dir));
     renderTable();
 }
 
-// --- ADDRESS FETCHING (RATE LIMITED) ---
 async function queueAddressFetch() {
     if (isFetching) return;
     const start = (currentPage - 1) * pageSize;
-    const targetTrips = filteredTrips.slice(start, start + pageSize).filter(t => !t.startAddress);
-    
-    if (!targetTrips.length) return alert("No missing addresses on this page.");
-    
+    const targets = filteredTrips.slice(start, start + pageSize).filter(t => !t.startAddress);
+    if (!targets.length) return alert("All addresses on this page are already loaded.");
     isFetching = true;
     const btn = document.getElementById('btnFetch');
-    
-    for (let i = 0; i < targetTrips.length; i++) {
-        const t = targetTrips[i];
-        btn.innerText = `⏳ Processing ${i+1}/${targetTrips.length}...`;
-        
+    for (let i = 0; i < targets.length; i++) {
+        const t = targets[i];
+        btn.innerText = `⏳ Processing ${i+1}/${targets.length}...`;
         t.startAddress = await fetchNominatim(t.sLat, t.sLng);
-        await new Promise(r => setTimeout(r, 1100)); // Rate limit 1 req/sec
+        await new Promise(r => setTimeout(r, 1100));
         t.endAddress = await fetchNominatim(t.eLat, t.eLng);
         await new Promise(r => setTimeout(r, 1100));
-
         updateRowUI(t);
         saveMemory();
     }
-    
     btn.innerText = "📍 Fetch Addresses (This Page)";
     isFetching = false;
 }
@@ -510,18 +479,13 @@ async function fetchNominatim(lat, lng) {
 function updateRowUI(t) {
     const sEl = document.getElementById(`start-${t.id}`);
     const eEl = document.getElementById(`end-${t.id}`);
-    if (sEl) { sEl.innerText = t.startAddress; sEl.className = isBroad(t.startAddress) ? 'broad-loc' : 'font-medium'; }
-    if (eEl) { eEl.innerText = t.endAddress; eEl.className = isBroad(t.endAddress) ? 'broad-loc' : 'font-medium'; }
+    if (sEl) { sEl.innerText = t.startAddress; sEl.className = isBroad(t.startAddress) ? 'broad-loc truncate max-w-[220px]' : 'font-medium truncate max-w-[220px]'; }
+    if (eEl) { eEl.innerText = t.endAddress; eEl.className = isBroad(t.endAddress) ? 'broad-loc truncate max-w-[220px]' : 'font-medium truncate max-w-[220px]'; }
 }
 
-// --- PERSISTENCE ---
 function saveMemory() {
     const data = {};
-    rawTrips.forEach(t => {
-        if (t.tag !== 'untagged' || t.purpose || t.startAddress) {
-            data[t.id] = { tag: t.tag, purpose: t.purpose, sa: t.startAddress, ea: t.endAddress };
-        }
-    });
+    rawTrips.forEach(t => { if (t.tag !== 'untagged' || t.purpose || t.startAddress) data[t.id] = { tag: t.tag, purpose: t.purpose, sa: t.startAddress, ea: t.endAddress }; });
     localStorage.setItem('rs_tracker_audit_v5', JSON.stringify(data));
 }
 
@@ -546,13 +510,9 @@ function clearLocalStorage() {
     }
 }
 
-// --- UTILS ---
 function toggleTag(id, tag) {
     const t = rawTrips.find(x => x.id === id);
-    if (t) {
-        t.tag = (t.tag === tag) ? 'untagged' : tag;
-        saveMemory(); applyFilters();
-    }
+    if (t) { t.tag = (t.tag === tag) ? 'untagged' : tag; saveMemory(); applyFilters(); }
 }
 
 function tagVisible(tag) {
@@ -588,12 +548,10 @@ function updateProgress(pct, msg) {
 }
 
 function getTs(p) { return parseInt(p.timestampMs || new Date(p.timestamp||0).getTime()); }
-async function yieldBrowser() { return new Promise(r => setTimeout(r, 0)); }
 function resetPageAndApply() { currentPage = 1; applyFilters(); }
 
 function exportCSV(type) {
     const rows = filteredTrips.filter(t => type === 'all' || t.tag === type);
-    // NEW: Columns for raw GPS review
     let csv = 'Date,Time,Start Address,End Address,Start Lat,Start Lng,End Lat,End Lng,Distance (km),Notes,Tag\n';
     rows.forEach(t => {
         const sAddr = (t.startAddress || "").replace(/"/g, '""');
@@ -604,7 +562,6 @@ function exportCSV(type) {
     a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], {type:'text/csv;charset=utf-8;'}));
     a.download = `CRA_Mileage_Log_${type}.csv`; a.click();
 }
-
 </script>
 </body>
 </html>
