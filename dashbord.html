@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rideshare Tax & Mileage Dashboard (2021-2024)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Chosen Palette: Warm Professional (Slate, Teal, and Gold) -->
+<!-- Application Structure Plan: A high-level executive dashboard designed for quick synthesis of four years of financial and operational performance. The structure uses a grid-based KPI section for immediate tax totals, followed by comparative trend charts and an audit-justification table. This allows users to jump straight to the numbers needed for T2125 forms while providing the underlying visual proof for the claimed conservative mileage percentages. -->
+<!-- Visualization & Content Choices: 
+1. Annual Performance -> Compare -> Grouped Bar Chart -> Hover interaction -> Contrasts Gross vs Net earnings. Chart.js.
+2. Platform Dominance -> Relationships -> Doughnut Chart -> Hover details -> Shows operational shift from Lyft to Uber. Chart.js.
+3. Audit-Safe Strategy -> Organize -> Interactive Table -> Highlighting conservative vs actual -> Justifies under-claiming mileage to reduce audit risk. Vanilla JS.
+Confirmed NO SVG or Mermaid used. -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+<style>
+  body { background-color: #fafaf9; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .chart-container { position: relative; width: 100%; max-width: 900px; margin: 0 auto; height: 350px; max-height: 400px; }
+  @media (min-width: 768px) { .chart-container { height: 400px; } }
+  .card { background: white; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e7e5e4; overflow: hidden; }
+  .kpi-card { border-top: 4px solid #14b8a6; }
+</style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+<header class="bg-teal-700 text-white py-8 shadow-lg">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
+    <div class="text-center md:text-left">
+      <h1 class="text-3xl font-bold tracking-tight">Rideshare Tax & Mileage Dashboard</h1>
+      <p class="text-teal-100 mt-2 text-sm">Interactive Multi-Year Operational Performance: 2021 - 2024</p>
+    </div>
+    <div class="mt-6 md:mt-0 flex items-center gap-4">
+      <label for="yearSelect" class="text-sm font-medium text-teal-50">Filter Year:</label>
+      <select id="yearSelect" onchange="updateView(this.value)" class="bg-teal-900 text-white border border-teal-500 rounded-lg py-2 px-6 focus:ring-2 focus:ring-teal-300 cursor-pointer outline-none">
+        <option value="all">Lifetime (2021-2024)</option>
+        <option value="2024">Fiscal 2024</option>
+        <option value="2023">Fiscal 2023</option>
+        <option value="2022">Fiscal 2022</option>
+        <option value="2021">Fiscal 2021</option>
+      </select>
+    </div>
+  </div>
+</header>
+
+<main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
+
+  <!-- Section 1: Executive Summary -->
+  <section>
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-slate-800">Executive Summary</h2>
+      <p class="text-slate-600 mt-2 max-w-3xl">This section consolidates the primary metrics required for Canadian tax reporting (Form T2125). It summarizes total take-home pay, business kilometers, and the Net GST/HST liability derived from multiple platform summaries. Values update dynamically based on the selected fiscal year.</p>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="card kpi-card p-6">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Net Earnings</h3>
+        <div id="kpi-earnings" class="text-3xl font-extrabold text-slate-900">$0.00</div>
+        <p class="text-[10px] text-slate-400 mt-2">After platform commissions</p>
+      </div>
+      <div class="card kpi-card p-6 border-t-teal-600">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Business KM</h3>
+        <div id="kpi-km" class="text-3xl font-extrabold text-teal-600">0</div>
+        <p class="text-[10px] text-slate-400 mt-2">Verified driving sessions</p>
+      </div>
+      <div class="card kpi-card p-6">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">GST/HST Owing</h3>
+        <div id="kpi-gst" class="text-3xl font-extrabold text-slate-900">$0.00</div>
+        <p class="text-[10px] text-slate-400 mt-2">Collected minus ITC credits</p>
+      </div>
+      <div class="card kpi-card p-6 border-t-amber-500">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Strategy Index</h3>
+        <div id="kpi-strategy" class="text-3xl font-extrabold text-amber-600">0%</div>
+        <p class="text-[10px] text-slate-400 mt-2">Conservative business claim</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: YoY Comparison -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="card p-8">
+      <h2 class="text-xl font-bold text-slate-800 mb-2">Financial Growth Trajectory</h2>
+      <p class="text-slate-600 mb-8 text-sm">Visualizes the ratio of Gross Fares (total revenue) to Net Earnings (actual pocketed). This helps identify periods of high platform commission or increased operating overhead. Use the tooltips to view precise year-over-year deltas.</p>
+      <div class="chart-container">
+        <canvas id="earningsChart"></canvas>
+      </div>
+    </div>
+    
+    <div class="card p-8">
+      <h2 class="text-xl font-bold text-slate-800 mb-2">Platform Utilization</h2>
+      <p class="text-slate-600 mb-8 text-sm">Organizes lifetime mileage distribution between Uber and Lyft. This illustrates the fundamental shift from a multi-platform approach in 2022 to a dominant Uber-led model in 2024. Hover to see the total kilometer split per provider.</p>
+      <div class="chart-container">
+        <canvas id="platformChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Audit Risk Strategy -->
+  <section class="card">
+    <div class="p-8 border-b border-slate-100">
+      <h2 class="text-xl font-bold text-slate-800 mb-2">CRA Audit-Safe Mileage Strategy</h2>
+      <p class="text-slate-600 text-sm">To proactively mitigate audit risks, we apply a "Conservative Claim Strategy." This table contrasts the actual calculated business percentage (via Google Timeline) against the lower percentage officially reported to the CRA. This deliberate under-claiming provides a significant margin of safety during reviews.</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm text-left">
+        <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200">
+          <tr>
+            <th class="px-8 py-4">Fiscal Year</th>
+            <th class="px-8 py-4">Odometer Total</th>
+            <th class="px-8 py-4">Calculated Biz %</th>
+            <th class="px-8 py-4 text-teal-700">Claimed Strategy</th>
+            <th class="px-8 py-4 text-center">Audit Profile</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr class="hover:bg-teal-50 transition-colors">
+            <td class="px-8 py-5 font-bold">2021</td>
+            <td class="px-8 py-5">12,512 km</td>
+            <td class="px-8 py-5">17.9%</td>
+            <td class="px-8 py-5 font-bold text-teal-600">17.9%</td>
+            <td class="px-8 py-5 text-center"><span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase">Baseline</span></td>
+          </tr>
+          <tr class="hover:bg-teal-50 transition-colors">
+            <td class="px-8 py-5 font-bold">2022</td>
+            <td class="px-8 py-5">19,161 km</td>
+            <td class="px-8 py-5">44.2%</td>
+            <td class="px-8 py-5 font-bold text-teal-600">28.0%</td>
+            <td class="px-8 py-5 text-center"><span class="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-[10px] font-bold uppercase">Conservative</span></td>
+          </tr>
+          <tr class="hover:bg-teal-50 transition-colors">
+            <td class="px-8 py-5 font-bold">2023</td>
+            <td class="px-8 py-5">16,549 km</td>
+            <td class="px-8 py-5">63.6%</td>
+            <td class="px-8 py-5 font-bold text-teal-600">40.0%</td>
+            <td class="px-8 py-5 text-center"><span class="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-[10px] font-bold uppercase">Conservative</span></td>
+          </tr>
+          <tr class="hover:bg-teal-50 transition-colors">
+            <td class="px-8 py-5 font-bold text-teal-600">2024</td>
+            <td class="px-8 py-5">9,574 km</td>
+            <td class="px-8 py-5">67.4%</td>
+            <td class="px-8 py-5 font-bold text-teal-600">60.0%</td>
+            <td class="px-8 py-5 text-center"><span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold uppercase">Safe Harbor</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="p-6 bg-slate-50 italic text-[11px] text-slate-500 border-t border-slate-200">
+      * All calculations are derived from Jayden_2021_2024_tax-perp Master Summary.
+    </div>
+  </section>
+
+</main>
+
+<footer class="bg-slate-900 text-slate-400 py-10 text-center text-xs mt-auto">
+  <div class="max-w-7xl mx-auto px-4">
+    <p>Operational Performance Dashboard • Rideshare Mileage Engine v4.0</p>
+    <p class="mt-2 opacity-50">Confidential Financial Data • For Audit Reference Purposes Only</p>
+  </div>
+</footer>
+
+<script>
+// --- SOURCE DATA ---
+const dataset = {
+  "2021": { net: 2474.29, gross: 3455.13, km: 2235.87, gst: 309.91, strategy: 17.9 },
+  "2022": { net: 7622.63, gross: 10929.71, km: 8472.00, gst: 956.39, strategy: 28.0 },
+  "2023": { net: 6699.36, gross: 10169.57, km: 10528.00, gst: 826.03, strategy: 40.0 },
+  "2024": { net: 2812.64, gross: 4054.52, km: 6449.00, gst: 383.79, strategy: 60.0 }
+};
+
+const platforms = {
+  uber: 17907,
+  lyft: 4276.51
+};
+
+// --- CHART INSTANCES ---
+let earningsChart, platformChart;
+
+function initCharts() {
+  const years = Object.keys(dataset);
+  const grossValues = years.map(y => dataset[y].gross);
+  const netValues = years.map(y => dataset[y].net);
+
+  // 1. Financial Performance Chart
+  const eCtx = document.getElementById('earningsChart').getContext('2d');
+  earningsChart = new Chart(eCtx, {
+    type: 'bar',
+    data: {
+      labels: years,
+      datasets: [
+        { label: 'Gross Fares ($)', data: grossValues, backgroundColor: '#cbd5e1', borderRadius: 4 },
+        { label: 'Net Earnings ($)', data: netValues, backgroundColor: '#14b8a6', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }
+    }
+  });
+
+  // 2. Platform Distribution Chart
+  const pCtx = document.getElementById('platformChart').getContext('2d');
+  platformChart = new Chart(pCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Uber (KM)', 'Lyft (KM)'],
+      datasets: [{
+        data: [platforms.uber, platforms.lyft],
+        backgroundColor: ['#0f172a', '#f43f5e'],
+        borderWidth: 0,
+        hoverOffset: 10
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '70%',
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+}
+
+// --- UI UPDATES ---
+function updateView(year) {
+  let earnings = 0, km = 0, gst = 0, strategy = 0;
+
+  const fmt = (val) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(val);
+  const num = (val) => new Intl.NumberFormat('en-CA').format(Math.round(val));
+
+  if (year === 'all') {
+    Object.values(dataset).forEach(d => {
+      earnings += d.net; km += d.km; gst += d.gst;
+    });
+    strategy = 36.5; // Average
+  } else {
+    const d = dataset[year];
+    earnings = d.net; km = d.km; gst = d.gst; strategy = d.strategy;
+  }
+
+  document.getElementById('kpi-earnings').innerText = fmt(earnings);
+  document.getElementById('kpi-km').innerText = num(km) + ' km';
+  document.getElementById('kpi-gst').innerText = fmt(gst);
+  document.getElementById('kpi-strategy').innerText = strategy.toFixed(1) + '%';
+}
+
+// --- BOOTSTRAP ---
+window.onload = () => {
+  initCharts();
+  updateView('all');
+};
+</script>
+</body>
+</html>
