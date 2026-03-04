@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rideshare Mileage Tracker - Smart Match Edition</title>
+<title>Rideshare Mileage Tracker - Bulletproof Edition</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <style>
@@ -12,7 +12,7 @@
   --color-text: #0f172a; --color-text-muted: #64748b;
   --color-primary: #0f766e; --color-primary-hover: #0d9488;
   --color-border: #e2e8f0; --color-success: #059669;
-  --color-warning: #ea580c; --color-blue: #2563eb;
+  --color-warning: #ea580c; --color-danger: #dc2626; --color-blue: #2563eb;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -51,6 +51,7 @@ select, input { padding: 0.5rem; border: 1px solid var(--color-border); border-r
 .btn-secondary { background: white; color: var(--color-text); border: 1px solid var(--color-border); }
 .btn-secondary:hover { background: var(--color-bg); }
 .btn-success { background: var(--color-success); color: white; }
+.btn-danger { background: var(--color-danger); color: white; }
 .btn-uber { background: black; color: white; }
 
 .year-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem; }
@@ -66,8 +67,6 @@ tr:hover { background: #f8fafc; }
 
 .address-block { margin-bottom: 0.5rem; }
 .address-text { font-weight: 500; display: block; margin-bottom: 0.2rem; color: var(--color-text); }
-.coord-link { color: var(--color-blue); text-decoration: none; font-size: 0.75rem; }
-.coord-link:hover { text-decoration: underline; }
 
 .tag-btn { border: 1px solid transparent; border-radius: 20px; padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-right: 0.25rem; }
 .tag-biz { background: #d1fae5; color: #065f46; }
@@ -82,7 +81,6 @@ tr:hover { background: #f8fafc; }
 .flex-space { flex-grow: 1; }
 .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
 
-/* Progress & Spinners */
 .progress-wrap { width: 100%; background: var(--color-border); border-radius: 8px; height: 10px; margin: 1rem 0; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--color-primary); width: 0%; transition: width 0.3s; }
 .status-text { text-align: center; color: var(--color-text-muted); font-size: 0.9rem; }
@@ -91,38 +89,41 @@ tr:hover { background: #f8fafc; }
 <body>
 
 <div class="header">
-  <h1>🚗 Rideshare Mileage Tracker - Smart Match Edition</h1>
-  <p>Secure, offline Google Takeout processing (2021+) with custom CSV shift-matching.</p>
+  <h1>🚗 Rideshare Mileage Tracker</h1>
+  <p>Bulletproof Edition: Immune to Google Timeline Bugs</p>
 </div>
 
 <div class="container">
   
   <div id="uploadCard" class="card">
     <h2><span class="step-badge">1</span> Upload Google Takeout Location History</h2>
-    <div style="background: #eff6ff; color: #1e3a8a; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem;">
-      <strong>Privacy Note:</strong> Your GPS data is processed entirely in your browser. Data is saved to your local browser storage.
-    </div>
     
     <div class="upload-area" id="uploadArea">
       <div class="icon">📁</div>
-      <p>Drag & Drop your <strong>Takeout .zip</strong> or <strong>Records.json</strong></p>
+      <p>Drag & Drop your <strong>Takeout .zip</strong></p>
       <input type="file" id="fileInput" accept=".json,.zip" multiple>
-      <button class="btn btn-primary" style="margin-top:1rem;" onclick="document.getElementById('fileInput').click()">Select File</button>
+      <button class="btn btn-primary" style="margin-top:1rem;" onclick="document.getElementById('fileInput').click()">Select Zip File</button>
+    </div>
+
+    <!-- THE BYPASS BUTTON -->
+    <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); text-align: center;">
+      <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0.75rem;">Did the Google Timeline bug wipe your Takeout data entirely?</p>
+      <button class="btn btn-danger" onclick="bypassGoogle()">⚠️ Bypass Google: Generate from Lyft/Uber CSV Only</button>
     </div>
     
     <div id="processingStatus" class="hidden" style="padding: 2rem; text-align: center;">
-      <h3>Processing Location Data...</h3>
+      <h3>Scanning all files for GPS data...</h3>
       <div class="progress-wrap"><div class="progress-fill" id="progressBar"></div></div>
-      <p class="status-text" id="statusText">Reading file...</p>
+      <p class="status-text" id="statusText">Extracting...</p>
     </div>
   </div>
 
   <div id="tripsSection" class="hidden">
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2><span class="step-badge">2</span> Review & Match Trips</h2>
+        <h2><span class="step-badge">2</span> Review & Map Trips</h2>
         <button class="btn btn-primary" onclick="fetchVisibleAddresses()" id="btnFetchAddresses">
-          📍 Fetch Street Addresses (Visible Trips)
+          📍 Fetch Street Addresses (Visible)
         </button>
       </div>
 
@@ -133,7 +134,6 @@ tr:hover { background: #f8fafc; }
         <div class="stat"><div class="val" id="totalKm">0</div><div class="lbl">Total KM</div></div>
         <div class="stat business"><div class="val" id="businessKm">0</div><div class="lbl">Business KM</div></div>
         <div class="stat personal"><div class="val" id="personalKm">0</div><div class="lbl">Personal KM</div></div>
-        <div class="stat"><div class="val" id="businessPct">0%</div><div class="lbl">Business %</div></div>
       </div>
 
       <div class="filters">
@@ -144,19 +144,6 @@ tr:hover { background: #f8fafc; }
             <option value="untagged">Untagged</option>
             <option value="business">Business Only</option>
             <option value="personal">Personal Only</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Search by Date (YYYY-MM-DD):</label>
-          <input type="text" id="dateSearch" placeholder="e.g. 2021-02-28" oninput="applyFilters()" style="width: 160px;">
-        </div>
-        <div class="filter-group">
-          <label>Min Distance:</label>
-          <select id="minKm" onchange="applyFilters()">
-            <option value="0">Show All</option>
-            <option value="0.5" selected>> 0.5 km</option>
-            <option value="2.0">> 2.0 km</option>
-            <option value="5.0">> 5.0 km</option>
           </select>
         </div>
         <div class="flex-space"></div>
@@ -181,26 +168,25 @@ tr:hover { background: #f8fafc; }
       </div>
 
       <div class="actions">
-        <button class="btn btn-success" onclick="exportCSV('business')">📊 Export Business Logbook (CSV)</button>
-        <button class="btn btn-secondary" onclick="exportCSV('all')">📅 Export All Year Data (CSV)</button>
+        <button class="btn btn-success" onclick="exportCSV('business')">📊 Export Business Logbook</button>
         <div class="flex-space"></div>
-        <button class="btn btn-uber" onclick="showUberModal()">🚕 Auto-Match from Earnings CSV</button>
+        <button class="btn btn-uber" onclick="showUberModal()">🚕 Import Uber/Lyft CSV</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Uber/Lyft Modal -->
+<!-- CSV Modal -->
 <div id="uberModal" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100;">
   <div class="card" style="width: 90%; max-width: 600px;">
-    <h2>🚕 Match Custom Earnings CSV</h2>
+    <h2 id="modalTitle">🚕 Match / Generate from CSV</h2>
     <p style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--color-text-muted);">
-      Upload your custom <strong>"All Rides.csv"</strong> file (or the official Lyft/Uber trips.csv). The tool is programmed to read your exact spreadsheet format to automatically find the timestamps and tag the corresponding Google trips as Business.
+      Upload your custom <strong>Earnings CSV</strong>. The tool will scan for "Date", "Time", and "Distance (km)" columns to build your logbook.
     </p>
     
     <div class="upload-area" style="padding: 2rem 1rem;" onclick="document.getElementById('uberInput').click()">
       <div class="icon">📄</div>
-      <p>Click to select <strong>All Rides CSV</strong></p>
+      <p>Click to select <strong>CSV File</strong></p>
       <input type="file" id="uberInput" accept=".csv">
     </div>
     
@@ -211,14 +197,12 @@ tr:hover { background: #f8fafc; }
 </div>
 
 <script>
-// State
 let allTrips = [];
 let currentYear = new Date().getFullYear();
 let filteredTrips = [];
 let renderLimit = 50;
-let isFetchingAddresses = false;
+let isBypassMode = false;
 
-// DOM Elements
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 
@@ -231,9 +215,15 @@ uploadArea.addEventListener('drop', e => {
 });
 fileInput.addEventListener('change', e => { if (e.target.files.length) processGoogleFiles(e.target.files); });
 
-// ==========================================
-// 1. DATA EXTRACTION ENGINE
-// ==========================================
+// BYPASS GOOGLE COMPLETELY
+function bypassGoogle() {
+  isBypassMode = true;
+  document.getElementById('uploadCard').classList.add('hidden');
+  document.getElementById('tripsSection').classList.remove('hidden');
+  document.getElementById('modalTitle').innerText = "🚕 Generate Logbook from CSV";
+  showUberModal();
+}
+
 async function processGoogleFiles(files) {
   document.getElementById('uploadArea').classList.add('hidden');
   document.getElementById('processingStatus').classList.remove('hidden');
@@ -243,78 +233,59 @@ async function processGoogleFiles(files) {
     const file = files[0];
     if (file.name.toLowerCase().endsWith('.zip')) {
       await extractFromZip(file);
-    } else {
-      await extractFromJson(file);
     }
 
-    if (allTrips.length === 0) throw new Error("No driving trips found from 2021 onwards.");
+    if (allTrips.length === 0) {
+      throw new Error("No trips found. Google's Timeline bug may have wiped your data. Please refresh the page and use the red 'Bypass Google' button to generate your logbook directly from your Excel/CSV files.");
+    }
 
-    // Cleanup & Sort
     allTrips.sort((a, b) => b.startTime - a.startTime);
-    loadSavedData();
-    
-    const years = [...new Set(allTrips.map(t => t.year))].sort((a,b) => b-a);
-    if (years.length > 0) currentYear = years[0];
-
-    buildYearTabs(years);
-    applyFilters();
-    
-    document.getElementById('uploadCard').classList.add('hidden');
-    document.getElementById('tripsSection').classList.remove('hidden');
+    initializeUI();
 
   } catch (err) {
-    alert("Error: " + err.message);
+    alert(err.message);
     document.getElementById('uploadArea').classList.remove('hidden');
     document.getElementById('processingStatus').classList.add('hidden');
   }
 }
 
 async function extractFromZip(file) {
-  setStatus("Unzipping...", 10);
+  setStatus("Unzipping & Aggressively Scanning...", 10);
   const zip = new JSZip();
   const loaded = await zip.loadAsync(file);
   const jsonFiles = [];
   
+  // SCAN EVERYTHING: Ignore folder names, just look for JSONs
   loaded.forEach((path, entry) => {
-    if (entry.name.endsWith('.json')) {
-      if (entry.name.includes('Semantic') && !entry.name.match(/201[0-9]|2020/)) {
-        jsonFiles.push({ entry, type: 'semantic' });
-      } else if (entry.name.includes('Records.json')) {
-        jsonFiles.push({ entry, type: 'records' });
-      }
-    }
+    if (entry.name.endsWith('.json')) jsonFiles.push(entry);
   });
 
-  if (!jsonFiles.length) throw new Error("No valid JSON found in ZIP.");
-  
-  const filesToProcess = jsonFiles.some(f => f.type === 'semantic') ? jsonFiles.filter(f => f.type === 'semantic') : jsonFiles;
-
   let count = 0;
-  for (const f of filesToProcess) {
-    setStatus(`Reading ${f.entry.name.split('/').pop()}...`, 10 + (count/filesToProcess.length*80));
+  for (const entry of jsonFiles) {
+    setStatus(`Analyzing ${entry.name.split('/').pop()}...`, 10 + (count/jsonFiles.length*80));
     try {
-      const data = JSON.parse(await f.entry.async("string"));
-      if (f.type === 'semantic') processSemantic(data);
-      else await processRecords(data.locations || []);
+      const data = JSON.parse(await entry.async("string"));
+      // Check for any known Google array format
+      if (data.timelineObjects) processSemantic(data);
+      if (data.locations) await processRecords(data.locations);
     } catch(e) {}
     count++;
-    await yieldBrowser();
+    await new Promise(r => setTimeout(r, 0));
   }
-}
-
-async function extractFromJson(file) {
-  setStatus("Reading JSON...", 50);
-  const data = JSON.parse(await file.text());
-  if (data.timelineObjects) processSemantic(data);
-  else if (data.locations) await processRecords(data.locations);
 }
 
 function processSemantic(data) {
   (data.timelineObjects || []).forEach(obj => {
     if (!obj.activitySegment) return;
     const seg = obj.activitySegment;
-    if (!['IN_PASSENGER_VEHICLE', 'DRIVING'].includes(seg.activityType)) return;
     
+    // BROADENED ALGORITHM: Catch "IN_VEHICLE" and "UNKNOWN" if distance > 0.5km
+    const type = seg.activityType;
+    let dist = (seg.distance || 0)/1000;
+    const isValidType = ['IN_PASSENGER_VEHICLE', 'DRIVING', 'IN_VEHICLE', 'MOTORCYCLING'].includes(type);
+    
+    if (!isValidType && dist < 0.5) return; 
+
     const start = new Date(seg.duration.startTimestamp || seg.duration.startTimestampMs || 0);
     const end = new Date(seg.duration.endTimestamp || seg.duration.endTimestampMs || 0);
     if (start.getFullYear() < 2021) return;
@@ -325,7 +296,6 @@ function processSemantic(data) {
     const sLat = sLoc.latitudeE7/1e7, sLng = sLoc.longitudeE7/1e7;
     const eLat = eLoc.latitudeE7/1e7, eLng = eLoc.longitudeE7/1e7;
     
-    let dist = (seg.distance || 0)/1000;
     if (dist <= 0) dist = haversine(sLat, sLng, eLat, eLng);
     if (dist < 0.2) return;
 
@@ -341,10 +311,7 @@ function processSemantic(data) {
 async function processRecords(locations) {
   locations.sort((a,b) => getTs(a) - getTs(b));
   let current = null;
-  
   for (let i=1; i<locations.length; i++) {
-    if (i%50000===0) { setStatus(`Crunching coords: ${i}...`, 50); await yieldBrowser(); }
-    
     const p=locations[i-1], c=locations[i];
     const dtMs = getTs(c) - getTs(p);
     if (new Date(getTs(c)).getFullYear() < 2021) continue;
@@ -356,9 +323,7 @@ async function processRecords(locations) {
     if (dtMs <= 0 || dtMs > 7200000) { if (current && current.distanceKm > 0.5) saveRecord(current); current = null; continue; }
     
     const dist = haversine(pLat,pLng,cLat,cLng);
-    const speed = dist / (dtMs/3600000);
-    
-    if (speed > 8) {
+    if (dist / (dtMs/3600000) > 8) {
       if (!current) current = { startTime: new Date(getTs(p)), sLat: pLat, sLng: pLng, distanceKm: 0 };
       current.distanceKm += dist; current.endTime = new Date(getTs(c)); current.eLat = cLat; current.eLng = cLng;
     } else if (dtMs > 900000) {
@@ -377,70 +342,7 @@ function saveRecord(t) {
 }
 
 // ==========================================
-// 2. REVERSE GEOCODING (ADDRESS FETCHING)
-// ==========================================
-async function fetchVisibleAddresses() {
-  if (isFetchingAddresses) return;
-  isFetchingAddresses = true;
-  const btn = document.getElementById('btnFetchAddresses');
-  btn.innerHTML = '⏳ Fetching Addresses... Do not close page';
-  btn.disabled = true;
-
-  const tripsToFetch = filteredTrips.slice(0, renderLimit).filter(t => !t.startAddress || !t.endAddress || t.startAddress.includes('°'));
-
-  let fetchedCount = 0;
-  for (const t of tripsToFetch) {
-    if (!isFetchingAddresses) break; 
-    
-    if (!t.startAddress || t.startAddress.includes('°')) {
-      t.startAddress = await fetchNominatim(t.sLat, t.sLng);
-      updateRowAddressUI(t.id, 'start', t.startAddress);
-      await new Promise(r => setTimeout(r, 1100)); // Rate limit 1 req/sec
-    }
-    
-    if (!t.endAddress || t.endAddress.includes('°')) {
-      t.endAddress = await fetchNominatim(t.eLat, t.eLng);
-      updateRowAddressUI(t.id, 'end', t.endAddress);
-      await new Promise(r => setTimeout(r, 1100));
-    }
-    
-    fetchedCount++;
-    btn.innerHTML = `⏳ Fetched ${fetchedCount}/${tripsToFetch.length}...`;
-    saveData(); 
-  }
-
-  isFetchingAddresses = false;
-  btn.innerHTML = '📍 Fetch Street Addresses (Visible Trips)';
-  btn.disabled = false;
-}
-
-async function fetchNominatim(lat, lng) {
-  try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
-      headers: { 'Accept-Language': 'en' }
-    });
-    if (!res.ok) return `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
-    const data = await res.json();
-    const a = data.address;
-    
-    const street = a.road || a.pedestrian || a.suburb || a.neighbourhood || '';
-    const city = a.city || a.town || a.village || a.county || '';
-    const state = a.state || '';
-    
-    const parts = [street, city, state].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
-  } catch (e) {
-    return `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
-  }
-}
-
-function updateRowAddressUI(tripId, type, newAddress) {
-  const el = document.getElementById(`addr-${type}-${tripId}`);
-  if (el) el.textContent = newAddress;
-}
-
-// ==========================================
-// 3. UBER / LYFT CUSTOM CSV IMPORT
+// CSV PARSER (HANDLES GOOGLE BYPASS)
 // ==========================================
 function showUberModal() { document.getElementById('uberModal').classList.remove('hidden'); }
 
@@ -452,7 +354,6 @@ document.getElementById('uberInput').addEventListener('change', async (e) => {
     const text = await e.target.files[0].text();
     const lines = text.split('\n');
     
-    // Auto-detect header row (Handles your custom spreadsheets with empty space up top)
     let headerIdx = 0;
     for (let i = 0; i < Math.min(10, lines.length); i++) {
         if (lines[i].toLowerCase().includes('date') && (lines[i].toLowerCase().includes('time') || lines[i].toLowerCase().includes('distance'))) {
@@ -472,53 +373,78 @@ document.getElementById('uberInput').addEventListener('change', async (e) => {
       
       const dateStr = row['date'] || row['request time'] || row['datetime'];
       const timeStr = row['time'] || '';
+      let dist = parseFloat(row['distance (km)'] || row['total_kms'] || row['distance'] || 0);
       
       if (!dateStr) continue;
-
-      let uDate;
-      if (timeStr) {
-          // Format from your custom CSV: "Feb 28" and "5:43 PM". Assuming year based on current active tab.
-          uDate = new Date(`${dateStr} ${currentYear} ${timeStr}`);
-      } else {
-          uDate = new Date(dateStr);
-      }
       
+      // Determine Year based on filename or string if missing
+      let csvYear = currentYear;
+      if (e.target.files[0].name.includes('2021')) csvYear = 2021;
+      if (e.target.files[0].name.includes('2022')) csvYear = 2022;
+      if (e.target.files[0].name.includes('2023')) csvYear = 2023;
+      if (e.target.files[0].name.includes('2024')) csvYear = 2024;
+
+      let uDate = timeStr ? new Date(`${dateStr} ${csvYear} ${timeStr}`) : new Date(dateStr);
       if (isNaN(uDate.getTime())) continue;
 
-      // Smart Matching: Matches Month, Day, and Time within a 45-minute window
-      const match = allTrips.find(t => {
-          const isSameDay = t.startTime.getMonth() === uDate.getMonth() && t.startTime.getDate() === uDate.getDate() && t.startTime.getFullYear() === uDate.getFullYear();
-          if (!isSameDay) return false;
+      // BYPASS MODE: Create the trip entirely from the CSV
+      if (isBypassMode) {
+          if (dist > 0) {
+              allTrips.push({
+                  id: `csv_${uDate.getTime()}_${i}`,
+                  year: uDate.getFullYear(),
+                  startTime: uDate,
+                  endTime: new Date(uDate.getTime() + 15*60000), // Approx 15 min
+                  distanceKm: dist,
+                  duration: 15,
+                  sLat: 0, sLng: 0, eLat: 0, eLng: 0,
+                  startAddress: row['pickup address'] || 'Extracted from CSV',
+                  endAddress: row['dropoff address'] || 'Extracted from CSV',
+                  tag: 'business',
+                  purpose: 'Imported from Earnings CSV'
+              });
+              matchCount++;
+          }
+      } else {
+          // NORMAL MODE: Match Google Trip
+          const match = allTrips.find(t => {
+              const isSameDay = t.startTime.getMonth() === uDate.getMonth() && t.startTime.getDate() === uDate.getDate() && t.startTime.getFullYear() === uDate.getFullYear();
+              if (!isSameDay) return false;
+              const tMins = t.startTime.getHours() * 60 + t.startTime.getMinutes();
+              const uMins = uDate.getHours() * 60 + uDate.getMinutes();
+              return Math.abs(tMins - uMins) < 45; 
+          });
           
-          const tMins = t.startTime.getHours() * 60 + t.startTime.getMinutes();
-          const uMins = uDate.getHours() * 60 + uDate.getMinutes();
-          return Math.abs(tMins - uMins) < 45; 
-      });
-      
-      if (match) {
-        match.tag = 'business';
-        match.purpose = 'Matched with Earnings CSV';
-        
-        // If official CSV used, grab addresses
-        const uStart = row['pickup address'] || row['start location'];
-        const uEnd = row['dropoff address'] || row['end location'];
-        if (uStart && !match.startAddress) match.startAddress = uStart;
-        if (uEnd && !match.endAddress) match.endAddress = uEnd;
-        
-        matchCount++;
+          if (match) {
+            match.tag = 'business';
+            match.purpose = 'Matched with Earnings CSV';
+            matchCount++;
+          }
       }
     }
     
-    saveData(); applyFilters();
-    alert(`✅ Successfully found and tagged ${matchCount} matching trips from your spreadsheet!`);
+    if (isBypassMode) {
+        allTrips.sort((a, b) => b.startTime - a.startTime);
+        initializeUI();
+        alert(`✅ Bypass Success! Generated ${matchCount} business trips directly from your CSV.`);
+    } else {
+        applyFilters();
+        alert(`✅ Successfully found and tagged ${matchCount} matching trips!`);
+    }
     
   } catch(err) { alert("Failed to read CSV: " + err.message); }
   e.target.value = '';
 });
 
-// ==========================================
-// 4. UI & RENDERING
-// ==========================================
+function initializeUI() {
+    document.getElementById('uploadCard').classList.add('hidden');
+    document.getElementById('tripsSection').classList.remove('hidden');
+    const years = [...new Set(allTrips.map(t => t.year))].sort((a,b) => b-a);
+    if (years.length > 0) currentYear = years[0];
+    buildYearTabs(years);
+    applyFilters();
+}
+
 function buildYearTabs(years) {
   const cont = document.getElementById('yearTabs');
   cont.innerHTML = '';
@@ -533,23 +459,7 @@ function buildYearTabs(years) {
 
 function applyFilters() {
   const tF = document.getElementById('tagFilter').value;
-  const mK = parseFloat(document.getElementById('minKm').value);
-  const searchDate = document.getElementById('dateSearch').value;
-  
-  filteredTrips = allTrips.filter(t => {
-    if (t.year !== currentYear) return false;
-    if (t.distanceKm < mK) return false;
-    if (tF !== 'all' && t.tag !== tF) return false;
-    
-    // Optional Date Search Filter (YYYY-MM-DD)
-    if (searchDate) {
-        const tDate = t.startTime.toISOString().split('T')[0];
-        if (tDate !== searchDate) return false;
-    }
-    
-    return true;
-  });
-  
+  filteredTrips = allTrips.filter(t => t.year === currentYear && (tF === 'all' || t.tag === tF));
   renderLimit = 50;
   updateStats();
   renderTable(true);
@@ -561,8 +471,8 @@ function renderTable(clear = false) {
   
   const toRender = filteredTrips.slice(tbody.children.length, renderLimit);
   toRender.forEach(t => {
-    const sAddr = t.startAddress || `${t.sLat.toFixed(4)}°, ${t.sLng.toFixed(4)}°`;
-    const eAddr = t.endAddress || `${t.eLat.toFixed(4)}°, ${t.eLng.toFixed(4)}°`;
+    const sAddr = t.startAddress || (t.sLat === 0 ? 'See Map' : `${t.sLat.toFixed(4)}°, ${t.sLng.toFixed(4)}°`);
+    const eAddr = t.endAddress || (t.eLat === 0 ? 'See Map' : `${t.eLat.toFixed(4)}°, ${t.eLng.toFixed(4)}°`);
     
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -570,20 +480,10 @@ function renderTable(clear = false) {
         <strong style="color:var(--color-text)">${t.startTime.toLocaleDateString('en-CA', {month:'short', day:'numeric'})}</strong><br>
         <span style="color:var(--color-text-muted); font-size:0.8rem;">${t.startTime.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'})}</span>
       </td>
-      <td>
-        <div class="address-block">
-          <span class="address-text" id="addr-start-${t.id}">${sAddr}</span>
-          <a href="https://maps.google.com/?q=${t.sLat},${t.sLng}" target="_blank" class="coord-link">Map ↗</a>
-        </div>
-      </td>
-      <td>
-        <div class="address-block">
-          <span class="address-text" id="addr-end-${t.id}">${eAddr}</span>
-          <a href="https://maps.google.com/?q=${t.eLat},${t.eLng}" target="_blank" class="coord-link">Map ↗</a>
-        </div>
-      </td>
+      <td><div class="address-block"><span class="address-text">${sAddr}</span></div></td>
+      <td><div class="address-block"><span class="address-text">${eAddr}</span></div></td>
       <td><strong>${t.distanceKm.toFixed(1)}</strong><br><span style="font-size:0.75rem; color:var(--color-text-muted);">${t.duration}m</span></td>
-      <td><input type="text" class="purpose-input" value="${t.purpose}" placeholder="Notes..." onchange="updateTrip('${t.id}', 'purpose', this.value)"></td>
+      <td><input type="text" class="purpose-input" value="${t.purpose}" placeholder="Notes..." onchange="t.purpose=this.value"></td>
       <td style="text-align:center;">
         <button class="tag-btn tag-biz ${t.tag==='business'?'active':''}" onclick="setTag('${t.id}', 'business', this)">Biz</button>
         <button class="tag-btn tag-per ${t.tag==='personal'?'active':''}" onclick="setTag('${t.id}', 'personal', this)">Per</button>
@@ -603,17 +503,15 @@ function setTag(id, tag, btn) {
     t.tag = t.tag === tag ? 'untagged' : tag;
     btn.parentElement.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
     if (t.tag !== 'untagged') btn.parentElement.querySelector(`.tag-${t.tag.substring(0,3)}`).classList.add('active');
-    saveData(); updateStats();
+    updateStats();
   }
 }
 
 function tagAllFiltered(tag) {
-  if(confirm(`Tag all ${filteredTrips.length} visible trips as ${tag}?`)) {
-    filteredTrips.forEach(t => t.tag = tag); saveData(); applyFilters();
+  if(confirm(`Tag all visible trips as ${tag}?`)) {
+    filteredTrips.forEach(t => t.tag = tag); applyFilters();
   }
 }
-
-function updateTrip(id, field, val) { const t = allTrips.find(x => x.id === id); if(t) { t[field] = val; saveData(); } }
 
 function updateStats() {
   const yt = allTrips.filter(t => t.year === currentYear);
@@ -624,12 +522,8 @@ function updateStats() {
   document.getElementById('totalKm').innerText = tot.toFixed(0);
   document.getElementById('businessKm').innerText = biz.toFixed(0);
   document.getElementById('personalKm').innerText = per.toFixed(0);
-  document.getElementById('businessPct').innerText = tot ? ((biz/tot)*100).toFixed(1)+'%' : '0%';
 }
 
-// ==========================================
-// 5. UTILS / STORAGE / EXPORT
-// ==========================================
 function getTs(p) { return parseInt(p.timestampMs || new Date(p.timestamp||0).getTime()); }
 function haversine(lat1, lon1, lat2, lon2) {
   const R=6371, p=Math.PI/180;
@@ -637,31 +531,6 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 function setStatus(text, pct) { document.getElementById('statusText').innerText = text; document.getElementById('progressBar').style.width = pct+'%'; }
-async function yieldBrowser() { return new Promise(r => setTimeout(r, 0)); }
-
-function saveData() {
-  const toSave = {};
-  allTrips.forEach(t => {
-    if (t.tag !== 'untagged' || t.purpose || t.startAddress || t.endAddress) {
-      toSave[t.id] = { t: t.tag, p: t.purpose, sa: t.startAddress, ea: t.endAddress };
-    }
-  });
-  localStorage.setItem('rs_data_v3', JSON.stringify(toSave));
-}
-
-function loadSavedData() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('rs_data_v3') || '{}');
-    allTrips.forEach(t => {
-      if (saved[t.id]) {
-        t.tag = saved[t.id].t || 'untagged';
-        t.purpose = saved[t.id].p || '';
-        t.startAddress = saved[t.id].sa || '';
-        t.endAddress = saved[t.id].ea || '';
-      }
-    });
-  } catch(e){}
-}
 
 function exportCSV(type) {
   const rows = allTrips.filter(t => t.year === currentYear && (type === 'all' || t.tag === type));
