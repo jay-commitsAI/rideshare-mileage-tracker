@@ -16,11 +16,13 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
 <style>
   body { background-color: #f8fafc; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   .table-wrap { border: 1px solid #e2e8f0; border-radius: 0.75rem; background: white; overflow: hidden; }
-  .tag-pill { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+  .tag-pill { padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: 0.2s; border: 1px solid transparent; text-transform: uppercase; }
   .tag-biz { background: #ccfbf1; color: #0f766e; }
   .tag-biz.active { background: #14b8a6; color: white; border-color: #0d9488; }
   .tag-per { background: #f1f5f9; color: #475569; }
   .tag-per.active { background: #64748b; color: white; border-color: #475569; }
+  .tag-rev { background: #fef3c7; color: #92400e; }
+  .tag-rev.active { background: #f59e0b; color: white; border-color: #d97706; }
   .broad-loc { color: #d97706; font-weight: 600; }
   .out-of-prov { border-left: 4px solid #ef4444 !important; }
   .pagination-btn { padding: 0.4rem 0.8rem; border: 1px solid #e2e8f0; background: white; border-radius: 0.375rem; font-size: 0.85rem; transition: 0.2s; }
@@ -37,7 +39,13 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
       <h1 class="text-2xl font-bold tracking-tight">🚗 Rideshare Mileage Tracker</h1>
       <p class="text-slate-400 text-sm mt-1">Ultimate Audit Edition: Street Filters & Raw GPS Export</p>
     </div>
-    <div class="flex gap-4">
+    <div class="flex gap-4 items-center">
+        <div id="yearSelector" class="hidden flex items-center gap-2">
+            <label for="activeYear" class="text-xs font-bold text-slate-400 uppercase">Fiscal Year:</label>
+            <select id="activeYear" onchange="resetPageAndApply()" class="bg-slate-800 text-white border border-slate-700 rounded py-1 px-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                <option value="all">All Years</option>
+            </select>
+        </div>
         <button onclick="clearLocalStorage()" class="text-xs text-slate-500 hover:text-red-400 transition-colors">🗑️ Clear Cache</button>
     </div>
   </div>
@@ -81,12 +89,12 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
         <div id="stat-total" class="text-3xl font-bold text-slate-800">0</div>
       </div>
       <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Anomalies</h3>
+        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Anomalies / Review</h3>
         <div id="stat-flag" class="text-3xl font-bold text-amber-600">0</div>
       </div>
       <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status Summary</h3>
-        <div id="yearDisplay" class="text-xl font-bold text-slate-800">Reviewing Trips</div>
+        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">View Focus</h3>
+        <div id="yearDisplay" class="text-xl font-bold text-slate-800 italic">Reviewing Trips</div>
       </div>
     </div>
 
@@ -95,24 +103,25 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
       <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
         <h2 class="text-lg font-bold text-slate-800">Trip Detail Explorer</h2>
         <div class="flex gap-2">
-            <button id="btnFetch" onclick="queueAddressFetch()" class="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors">📍 Fetch Addresses (This Page)</button>
-            <button onclick="exportCSV('business')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black transition-colors">📊 Export Logbook</button>
+            <button id="btnFetch" onclick="queueAddressFetch()" class="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors shadow-sm">📍 Fetch Addresses (This Page)</button>
+            <button onclick="exportCSV('business')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black transition-colors shadow-sm">📊 Export Logbook</button>
         </div>
       </div>
 
       <div class="bg-slate-50 p-4 rounded-xl flex flex-wrap gap-4 mb-6 items-end text-sm">
         <div class="flex flex-col">
           <label class="text-[10px] font-bold text-slate-400 uppercase mb-1">Status</label>
-          <select id="filterTag" onchange="resetPageAndApply()" class="border border-slate-200 rounded p-1.5">
+          <select id="filterTag" onchange="resetPageAndApply()" class="border border-slate-200 rounded p-1.5 focus:ring-2 focus:ring-teal-500 outline-none">
             <option value="all">All Trips</option>
             <option value="untagged">Untagged Only</option>
             <option value="business">Business Only</option>
             <option value="personal">Personal Only</option>
+            <option value="review">Review Needed</option>
           </select>
         </div>
         <div class="flex flex-col">
           <label class="text-[10px] font-bold text-slate-400 uppercase mb-1">Smart Filters</label>
-          <select id="filterSmart" onchange="resetPageAndApply()" class="border border-slate-200 rounded p-1.5">
+          <select id="filterSmart" onchange="resetPageAndApply()" class="border border-slate-200 rounded p-1.5 focus:ring-2 focus:ring-teal-500 outline-none">
             <option value="none">No Filter</option>
             <option value="broad">Broad Locations (Manual Review)</option>
             <option value="personal_streets">Prudential / Hopewell (Personal)</option>
@@ -122,7 +131,7 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
         </div>
         <div class="flex flex-col">
           <label class="text-[10px] font-bold text-slate-400 uppercase mb-1">Sort By</label>
-          <select id="filterSort" onchange="resetPageAndApply()" class="border border-slate-200 rounded p-1.5">
+          <select id="filterSort" onchange="resetPageAndApply()" class="border border-slate-200 rounded p-1.5 focus:ring-2 focus:ring-teal-500 outline-none">
             <option value="date-desc">Newest First</option>
             <option value="date-asc">Oldest First</option>
             <option value="km-desc">Longest KM</option>
@@ -131,8 +140,9 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
         </div>
         <div class="flex-grow"></div>
         <div class="flex gap-2">
-            <button onclick="tagVisible('business')" class="bg-teal-50 text-teal-700 px-3 py-1.5 rounded border border-teal-200 text-xs font-bold hover:bg-teal-100">Tag Page: Biz</button>
-            <button onclick="tagVisible('personal')" class="bg-slate-100 text-slate-700 px-3 py-1.5 rounded border border-slate-200 text-xs font-bold hover:bg-slate-200">Tag Page: Per</button>
+            <button onclick="tagVisible('business')" class="bg-teal-50 text-teal-700 px-3 py-1.5 rounded border border-teal-200 text-[10px] font-black uppercase hover:bg-teal-100 transition-colors">Bulk Biz</button>
+            <button onclick="tagVisible('personal')" class="bg-slate-100 text-slate-700 px-3 py-1.5 rounded border border-slate-200 text-[10px] font-black uppercase hover:bg-slate-200 transition-colors">Bulk Per</button>
+            <button onclick="tagVisible('review')" class="bg-amber-50 text-amber-700 px-3 py-1.5 rounded border border-amber-200 text-[10px] font-black uppercase hover:bg-amber-100 transition-colors">Bulk Review</button>
         </div>
       </div>
 
@@ -145,7 +155,7 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
               <th class="px-4 py-3">End Location</th>
               <th class="px-4 py-3 w-20">KM</th>
               <th class="px-4 py-3">Notes</th>
-              <th class="px-4 py-3 text-center w-32">Tag</th>
+              <th class="px-4 py-3 text-center w-40">Audit Tag</th>
             </tr>
           </thead>
           <tbody id="tripBody" class="text-sm divide-y divide-slate-50">
@@ -239,7 +249,6 @@ const sourceLog2021 = [
 
 const fileInput = document.getElementById('fileInput');
 
-// Use a consistent listener and prevent double windows
 fileInput.addEventListener('change', e => { 
     if (e.target.files.length) {
         const files = e.target.files;
@@ -276,12 +285,21 @@ async function processFiles(files) {
         
         document.getElementById('progressContainer').classList.add('hidden');
         document.getElementById('dashboardSection').classList.remove('hidden');
+        
+        populateYearSelector();
         applyFilters();
 
     } catch (err) {
         alert("Extraction Error: " + err.message);
         location.reload();
     }
+}
+
+function populateYearSelector() {
+    const years = [...new Set(rawTrips.map(t => t.startTime.getFullYear()))].sort((a,b) => b-a);
+    const sel = document.getElementById('activeYear');
+    sel.innerHTML = '<option value="all">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+    document.getElementById('yearSelector').classList.remove('hidden');
 }
 
 function parseData(data) {
@@ -306,7 +324,6 @@ function parseData(data) {
         let sLoc = {lat:0, lng:0}, eLoc = {lat:0, lng:0};
         let dist = (seg.activity ? (seg.activity.distanceMeters || seg.activity.distance || 0) : (seg.distance || 0)) / 1000;
 
-        // FIXED: referencing 'seg.activity' instead of undefined 'activity'
         if (seg.activity && seg.activity.start) {
             sLoc = parseCoord(seg.activity.start); 
             eLoc = parseCoord(seg.activity.end);
@@ -363,8 +380,10 @@ function applyFilters() {
     const tagF = document.getElementById('filterTag').value;
     const smartF = document.getElementById('filterSmart').value;
     const sortF = document.getElementById('filterSort').value;
+    const yearF = document.getElementById('activeYear').value;
 
     filteredTrips = rawTrips.filter(t => {
+        if (yearF !== 'all' && t.startTime.getFullYear().toString() !== yearF) return false;
         if (tagF !== 'all' && t.tag !== tagF) return false;
         
         if (smartF === 'broad') {
@@ -416,6 +435,7 @@ function renderTable() {
                 <div class="flex gap-1 justify-center">
                     <button onclick="toggleTag('${t.id}', 'business')" class="tag-pill tag-biz ${t.tag === 'business' ? 'active' : ''}">Biz</button>
                     <button onclick="toggleTag('${t.id}', 'personal')" class="tag-pill tag-per ${t.tag === 'personal' ? 'active' : ''}">Per</button>
+                    <button onclick="toggleTag('${t.id}', 'review')" class="tag-pill tag-rev ${t.tag === 'review' ? 'active' : ''}">Rev</button>
                 </div>
             </td>
         `;
@@ -518,7 +538,7 @@ function toggleTag(id, tag) {
 function tagVisible(tag) {
     const start = (currentPage - 1) * pageSize;
     const slice = filteredTrips.slice(start, start + pageSize);
-    if (confirm(`Tag all ${slice.length} visible trips as ${tag}?`)) {
+    if (confirm(`Tag all ${slice.length} visible trips as ${tag.toUpperCase()}?`)) {
         slice.forEach(t => t.tag = tag);
         saveMemory(); applyFilters();
     }
@@ -530,10 +550,20 @@ function updateNote(id, val) {
 }
 
 function updateStats() {
+    const yearF = document.getElementById('activeYear').value;
+    const tripsForStats = yearF === 'all' 
+        ? rawTrips 
+        : rawTrips.filter(t => t.startTime.getFullYear().toString() === yearF);
+
     const sum = (arr) => arr.reduce((a,b) => a + b.distanceKm, 0);
-    document.getElementById('stat-biz').innerText = Math.round(sum(rawTrips.filter(t => t.tag === 'business')));
-    document.getElementById('stat-total').innerText = Math.round(sum(rawTrips));
-    document.getElementById('stat-flag').innerText = rawTrips.filter(t => !t.isOntario).length;
+    document.getElementById('stat-biz').innerText = Math.round(sum(tripsForStats.filter(t => t.tag === 'business')));
+    document.getElementById('stat-total').innerText = Math.round(sum(tripsForStats));
+    
+    // Anomalies = Outside Ontario OR Tagged for Review
+    const anomalies = tripsForStats.filter(t => !t.isOntario || t.tag === 'review').length;
+    document.getElementById('stat-flag').innerText = anomalies;
+    
+    document.getElementById('yearDisplay').innerText = yearF === 'all' ? 'Lifetime Summary' : `${yearF} Summary`;
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
