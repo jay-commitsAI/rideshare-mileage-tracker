@@ -39,7 +39,7 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
     <div class="text-center md:text-left mb-4 md:mb-0">
       <h1 class="text-2xl font-bold tracking-tight">🚗 Rideshare Mileage Tracker</h1>
-      <p class="text-slate-400 text-sm mt-1">Ultimate Audit Edition: Street Filters & Exclusion Tagging</p>
+      <p class="text-slate-400 text-sm mt-1">Ultimate Audit Edition: Full Logbook Export Engine</p>
     </div>
     <div class="flex gap-4 items-center">
         <div id="yearSelector" class="hidden flex items-center gap-2">
@@ -111,7 +111,8 @@ CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
         <h2 class="text-lg font-bold text-slate-800">Trip Detail Explorer</h2>
         <div class="flex gap-2">
             <button id="btnFetch" onclick="queueAddressFetch()" class="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors shadow-sm">📍 Fetch Addresses (This Page)</button>
-            <button onclick="exportCSV('business')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black transition-colors shadow-sm">📊 Export Logbook</button>
+            <button onclick="exportCSV('business')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black transition-colors shadow-sm">📊 Export Biz CSV</button>
+            <button onclick="exportCSV('all')" class="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-800 transition-colors shadow-sm">📑 Export Master Logbook</button>
         </div>
       </div>
 
@@ -621,7 +622,22 @@ function getTs(p) { return parseInt(p.timestampMs || new Date(p.timestamp||0).ge
 function resetPageAndApply() { currentPage = 1; applyFilters(); }
 
 function exportCSV(type) {
-    const rows = filteredTrips.filter(t => type === 'all' || t.tag === type);
+    const yearF = document.getElementById('activeYear')?.value || 'all';
+    
+    // Logic: If 'all' is clicked, export everything for the current year (ignoring current filter view)
+    // If 'business' is clicked, export only biz trips for current year
+    let rows;
+    if (type === 'all') {
+        rows = rawTrips.filter(t => yearF === 'all' || t.startTime.getFullYear().toString() === yearF);
+    } else {
+        rows = rawTrips.filter(t => {
+            const yMatch = yearF === 'all' || t.startTime.getFullYear().toString() === yearF;
+            return yMatch && t.tag === type;
+        });
+    }
+
+    if (rows.length === 0) return alert("No data to export for the current selection.");
+
     let csv = 'Date,Time,Start Address,End Address,Start Lat,Start Lng,End Lat,End Lng,Distance (km),Notes,Tag\n';
     rows.forEach(t => {
         const sAddr = (t.startAddress || "").replace(/"/g, '""');
@@ -630,7 +646,7 @@ function exportCSV(type) {
     });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], {type:'text/csv;charset=utf-8;'}));
-    a.download = `CRA_Mileage_Log_${type}.csv`; a.click();
+    a.download = `CRA_Logbook_${type.toUpperCase()}_${yearF}.csv`; a.click();
 }
 </script>
 </body>
